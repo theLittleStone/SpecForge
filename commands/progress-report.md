@@ -37,8 +37,10 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 - spec 状态为 `[新增: 已定义]` / `[新增: 测试已生成]` / `[新增: 已实现]` / `[新增: 已测试]` / `[新增: 待修复]`
 - spec 状态为 `[修改: 已定义]` / `[修改: 测试已生成]` / `[修改: 已实现]` / `[修改: 已测试]` / `[修改: 待修复]`
-- spec 状态为 `[废弃: 待删除]` / `[废弃: 测试已生成]`
+- spec 状态为 `[废弃: 待删除]` / `[废弃: 待修复]`
 - task 状态为 TODO 或 DEFINED
+
+判定优先级：`已完成` 优先——当所有 task 均为 `[IMPLEMENTED]` 且所有规格达终态（新增/修改=`已验证`，废弃=`已解引用` 或 `已删除`）时直接判定已完成，由收尾流程执行 `_deprecated/` 物理删除，不落入未完成分支。
 
 ### 已完成
 
@@ -46,7 +48,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 - 所有 `[新增: xxx]` 规格为 `[新增: 已验证]`
 - 所有 `[修改: xxx]` 规格为 `[修改: 已验证]`
-- 所有 `[废弃: xxx]` 规格为 `[废弃: 已删除]`
+- 所有 `[废弃: xxx]` 规格为 `[废弃: 已解引用]` 或 `[废弃: 已删除]`（物理删除在收尾流程内执行）
 - 所有 task 为 IMPLEMENTED
 
 ## 输出
@@ -63,7 +65,8 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 1. 生成 `planning/summary.md`，标注「未完成」
 2. 将 `planning/` 下所有文件（除 `archive/` 目录外）**复制**（非移动）到 `planning/archive/planning_{round}/`
 3. 追加 `./changelist.md` 条目，标注 `(incomplete)`
-4. 清空 `planning/` 目录（除 `archive/` 外），允许新轮次开始
+4. 若项目根目录存在 `_deprecated/`，一并清理（移入的死代码不归档、不跨轮保留）
+5. 清空 `planning/` 目录（除 `archive/` 外），允许新轮次开始
 
 #### Markdown（用户可读）
 
@@ -89,6 +92,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 - [修改: 已实现] spec_c
 - [新增: 待修复] spec_d
 - [废弃: 待删除] spec_e
+- [废弃: 待修复] spec_g
 
 ## 未完成任务
 - Task 1
@@ -102,13 +106,14 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 #### 执行操作
 
-1. 生成总结文件 `planning/summary.md`
-2. 创建 `planning/archive/planning_{round}/` 子目录（`round` 取自 `planning/requirement.md` frontmatter）
-3. 将 `planning/` 下所有文件（除 `archive/` 目录外）移入该子目录
-4. 在项目根目录 `./changelist.md` 中追加当前轮次条目（格式详见「Changelist 格式」章节）
+1. 物理删除项目根目录 `_deprecated/`（若存在），并将 `planning/specifications.md` 中所有 `[废弃: 已解引用]` 规格状态更新为 `[废弃: 已删除]`
+2. 生成总结文件 `planning/summary.md`
+3. 创建 `planning/archive/planning_{round}/` 子目录（`round` 取自 `planning/requirement.md` frontmatter）
+4. 将 `planning/` 下所有文件（除 `archive/` 目录外）移入该子目录
+5. 在项目根目录 `./changelist.md` 中追加当前轮次条目（格式详见「Changelist 格式」章节）
    - 若 `./changelist.md` 不存在则新建
    - 条目包含：`round`（标题 `## Round <round>`）、`change_type`、本轮主要变动摘要（2-5 条，提取自 `planning/requirement.md` 的 `# Goal` 章节）、Archive 路径指针
-5. 可选执行 git 提交
+6. 可选执行 git 提交（含 `_deprecated/` 删除与归档内容）
 
 #### Markdown
 

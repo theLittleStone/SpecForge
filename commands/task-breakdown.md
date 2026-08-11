@@ -30,12 +30,14 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 7. 写入后检查下游产物，扫描 `planning/specifications.md`（如存在）：
     - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
      提醒用户「任务已更新。代码尚未产生，请继续运行 `/specification-define`」
-    - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
+    - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
      a. 从当前处理 task 关联的规格中提取 `Affected Files` 字段，去重
      b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
-     c. 过滤掉 `planning/` 目录下的文件，输出回滚指令：
-        git restore <file1> <file2> ...
-     d. 醒示「代码已恢复。planning/ 文档保留，请重跑 `/specification-define`」
+      c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
+         git restore <file1> <file2> ...
+         （若规格含 `[已解引用]` / `[已删除]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本）
+         （若存在 git 未跟踪的新文件，提醒手动删除）
+      d. 醒示「代码已恢复。planning/ 文档保留，请重跑 `/specification-define`」
 
 默认不直接覆盖文件，必须基于差异更新。
 
@@ -72,7 +74,7 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
   - enhancement → 修改已完成
   - refactor → 重构已完成
   - bugfix → 修复已完成
-  - removal → 代码已删除
+  - removal → 已解引用并移入 `_deprecated/`（物理删除由 progress-report 收尾统一执行）
 - Specs 为子列表格式（`  - spec_name`），每行一条规格名称，由 specification-define 填写，code-review 据此遍历关联规格
 
 ## 输入来源

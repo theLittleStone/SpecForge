@@ -35,6 +35,7 @@ OpenCode 启动时自动读取工作目录下的该文件并插入上下文。
 
 ## 执行约束
 - 一次只处理一个 task。活跃 task = tasks.md 首个 [DEFINED]。
+- 变更代码后同步维护模块引用索引（architecture.md 的 `# Dependency Index` 与规格的 `Depended By`）。废弃模块先解引用再移入 `_deprecated/`，禁止直接删除。
 ```
 
 ## 约束

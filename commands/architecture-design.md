@@ -19,18 +19,20 @@ description: 维护架构设计文件，支持新建、修改、重构、删除�
 3. 分析需求与当前架构
 4. 分析并填充 `# Impact Analysis`（变更对现有模块、数据流、API 的影响范围与副作用），必须包含：
    - **开放边界识别**：列出本轮变更涉及的外部系统边界（邮件、支付、存储、GUI 渲染、非确定性源等），标注是否可通过 Test Double 覆盖
-5. 生成差异修改提案
-6. 输出预览
-7. 确认后写入，并将 frontmatter 中 `status` 更新为 `confirmed`
-8. 写入后检查下游产物，扫描 `planning/specifications.md`（如存在）：
+5. 同步维护 `# Dependency Index`：比对本轮 `# Changes` 涉及的模块，更新其 `Depends On` / `Depended By`（新增/移除引用同步更新）。涉及废弃/删除的模块，在 `Depended By` 列出其全部引用方，作为后续解引用与物理删除的依据
+6. 生成差异修改提案
+7. 输出预览
+8. 确认后写入，并将 frontmatter 中 `status` 更新为 `confirmed`
+9. 写入后检查下游产物，扫描 `planning/specifications.md`（如存在）：
     - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
      提醒用户「架构已更新。代码尚未产生，请按顺序重跑：`/task-breakdown` → `/specification-define`」
-    - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
-      a. 汇总所有状态为 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]` 或 `[已删除]` 的规格的 `Affected Files` 字段，去重
+    - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
+      a. 汇总所有状态为 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 的规格的 `Affected Files` 字段，去重
      b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
-     c. 过滤掉 `planning/` 目录下的文件，输出回滚指令：
-        git restore <file1> <file2> ...
-        （若存在 git 未跟踪的新文件，提醒手动删除）
+     c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
+         git restore <file1> <file2> ...
+         （若规格含 `[已解引用]` / `[已删除]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本）
+         （若存在 git 未跟踪的新文件，提醒手动删除）
       d. 醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/task-breakdown` → `/specification-define`」
 
 ### 共识要求
@@ -52,6 +54,13 @@ description: 维护架构设计文件，支持新建、修改、重构、删除�
 
                        涉及开放边界的 Change 必须排在纯逻辑 Change 之后（Dependencies 列体现依赖关系）。
 # Impact Analysis    — 变更对现有模块、数据流、API 的影响分析，副作用评估
+# Dependency Index   — 模块级双向引用索引，随本轮变更保持最新
+
+                     | Module | Depends On | Depended By |
+                     |--------|------------|-------------|
+                     | 模块名  | 依赖的模块（无则 N/A） | 引用本模块的模块（无则 N/A） |
+
+                     新增/删除引用时同步更新。涉及废弃/删除的模块，必须在 Depended By 中列出全部引用方，作为后续解引用与物理删除的依据。
 # Design Decisions   — 关键设计决策、技术选型、取舍理由
 ### Test Double 策略
 
@@ -126,6 +135,7 @@ change_type: <继承自 requirement.md>
                        |--------|-------------|--------------|
                        | 名（操作） | 此变更要做什么 | N/A / 其他 Change |
 # Impact Analysis    — 变更对现有模块、数据流、API 的影响分析，副作用评估
+# Dependency Index   — 模块级双向引用索引（Module / Depends On / Depended By 表格），随变更保持最新
 # Design Decisions   — 关键设计决策、技术选型、取舍理由
 ```
 
@@ -146,3 +156,4 @@ change_type: <继承自 requirement.md>
 - 每条 Change 对应一个独立 concern，避免过粗（覆盖多个无关改动）或过细（每文件一个 Change）
 - 必须以 # Impact Analysis 描述变更影响
 - 涉及开放边界的 Change 必须延迟到纯逻辑 Change 之后（通过 Dependencies 列确保排序）
+- 涉及删除/废弃的模块必须在 `# Dependency Index` 中列出其全部引用方（Depended By）

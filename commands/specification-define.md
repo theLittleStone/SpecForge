@@ -39,13 +39,27 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
 8. 确认后写入 specifications.md，并将该 task 下所有规格名称以子列表格式（`  - spec_name`）写入 tasks.md 该 task 的 `Specs` 字段，建立双向链接，同时将该 task 标题标记更新为 `[DEFINED]`
 9. 写入后检查当前 task 下规格的状态：
     - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]` → 代码未产生，安全。
-     提醒用户「规格已定义，请继续运行 `/test-generate` 生成测试」
-    - 存在 `[已实现]`、`[已测试]`、`[测试已生成]`、`[待修复]`、`[已验证]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
+     提醒用户「规格已定义，请继续运行 `/test-generate` 生成测试（废弃规格跳过测试生成，可直接 `/code-generate`）」
+    - 存在 `[已实现]`、`[已测试]`、`[测试已生成]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
      a. 从当前 task 关联的规格中提取 `Affected Files` 字段，去重
      b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
-     c. 过滤掉 `planning/` 目录下的文件，输出回滚指令：
-        git restore <file1> <file2> ...
+      c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
+         git restore <file1> <file2> ...
+         （若规格含 `[已解引用]` / `[已删除]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本）
+         （若存在 git 未跟踪的新文件，提醒手动删除）
       d. 醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/test-generate` → `/code-generate`」
+
+### 废弃规格（removal）的定义语义
+
+废弃是行为减量，不适用测试先行。废弃规格按以下语义定义：
+
+- **Spec**: 必须显式指明待删目标文件/函数，具体到可直接定位。禁止模糊描述（如"清理旧代码"）
+- **Interface**: 语义改为「不破坏契约」——列出受影响模块与被依赖方，不再定义新接口
+- **Depended By**: 必填，从 `architecture.md` 的 `# Dependency Index` 推导，列出引用本规格目标文件的全部模块，作为 code-generate 解引用的依据
+- **Test Cases**: 不要求新写 `[自动化]` 用例（可保留 `[人工]` 视觉验证：确认功能已从界面消失）。改为引用既有测试并列出验证手段清单：
+  1. 受影响模块定向测试（由 `Depended By` 导出）
+  2. 全量构建 / 类型检查
+  3. `grep` 引用扫描（确认无残留引用）
 
 ### 共识要求
 
@@ -63,6 +77,7 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
 
 - **Task**: Task N — 所属任务编号，建立到 task 的反向指针
 - **Change Type**: feature | enhancement | bugfix | refactor | removal
+- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填，从 architecture.md 的 # Dependency Index 推导>
 - **Spec**: <自由描述> — 指明文件/函数/位置及期望行为，具体到可直接生成 diff
 - **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约
   - 生产实现: <生产代码实现类/模块名>
@@ -78,7 +93,7 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
     - **操作**: <用户应执行的步骤>
     - **预期**: <期望的可见/可感结果>
     - **通过标准**: <判断 PASS/FAIL 的具体条件>
-- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；追加去重
+- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；废弃规格为目标代码原始路径 + 引用方文件 + 移动后 `_deprecated/` 内路径；追加去重
 - **Issues**: — test-verify 写入当前失败原因；code-generate 修复后清空；code-review 严重问题时写入
 - **Retry Count**: 0 — test-verify 递增
 ```
@@ -115,10 +130,10 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 | `[修改: 已测试]` | 修改已通过测试，待审查 |
 | `[修改: 待修复]` | 修改测试未通过，需回退修复 |
 | `[修改: 已验证]` | 修改已通过审查（终态） |
-| `[废弃: 待删除]` | 规格待删除，需生成副作用验证测试 |
-| `[废弃: 测试已生成]` | 副作用验证测试已生成，待删除代码 |
-| `[废弃: 待修复]` | 副作用验证未通过，需修复受影响模块 |
-| `[废弃: 已删除]` | 代码已删除并通过副作用检查（终态） |
+| `[废弃: 待删除]` | 规格已定义（含待删目标与 `Depended By`），待解引用 |
+| `[废弃: 已解引用]` | 引用方已全部移除，代码已移入 `_deprecated/`，定向测试 + 全量构建通过 |
+| `[废弃: 待修复]` | 解引用验证未通过，需修复受影响模块后重试 |
+| `[废弃: 已删除]` | `_deprecated/` 中代码已物理删除（progress-report 收尾），终态 |
 
 ## 输入来源
 
@@ -129,6 +144,7 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 | 文件 | 用途 | 关键内容 |
 |------|------|---------|
 | `planning/tasks.md` | 任务列表 | 按 `## Task N` 标题顺序扫描，选取第一个标题标记 `[TODO]` 的任务，从详情字段提取 `Change Type`、`Depends On`、`Description`。不跨 task 处理。 |
+| `planning/architecture.md` | 依赖索引 | `# Dependency Index` 章节，用于推导规格的 `Depended By` |
 
 ### 状态过滤
 
@@ -168,6 +184,7 @@ based_on: planning/tasks.md
 
 - **Task**: [[tasks.md#task-n]] — 所属任务编号，建立到 task 的反向指针
 - **Change Type**: feature | enhancement | bugfix | refactor | removal
+- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填，从 architecture.md 的 # Dependency Index 推导>
 - **Spec**: <自由描述> — 指明文件/函数/位置及期望行为，具体到可直接生成 diff
 - **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约
   - 生产实现: <生产代码实现类/模块名>
@@ -183,9 +200,9 @@ based_on: planning/tasks.md
     - **操作**: <用户应执行的步骤>
     - **预期**: <期望的可见/可感结果>
     - **通过标准**: <判断 PASS/FAIL 的具体条件>
-- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；追加去重，每行一个
+- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；废弃规格为引用方文件 + 目标代码原始路径 + 移动后 `_deprecated/` 内文件路径；追加去重，每行一个
 - **Issues**: — test-verify 写入当前失败原因；code-generate 修复后清空；code-review 严重问题时写入
-- **Retry Count**: 0 — test-verify 每次标记 `[新增: 待修复]` 或 `[修改: 待修复]` 时递增；code-generate 修复后重置为 0
+- **Retry Count**: 0 — test-verify 每次标记 `[新增: 待修复]`、`[修改: 待修复]` 或 `[废弃: 待修复]` 时递增；code-generate 修复后重置为 0
 ```
 
 ### 交互预览
@@ -221,3 +238,7 @@ based_on: planning/tasks.md
 - 不包含任何实现代码
 - 必须能映射回任务
 - 必须将所有规格名称写回 tasks.md 中对应 task 的 `Specs` 字段，建立双向链接
+- 废弃规格（removal）附加约束：
+   - `Spec` 必须显式指明待删目标文件/函数，禁止模糊描述
+   - `Depended By` 必填，且须与 `architecture.md` 的 `# Dependency Index` 一致
+   - `Test Cases` 不要求新写用例，为验证手段清单（定向测试 / 全量构建 / grep 扫描），不受上述 `[自动化]`/`[人工]` 标记要求约束
