@@ -2,7 +2,7 @@
 
 **A specification-driven TDD workflow framework for AI coding agents**
 
-[License: MIT] [Platform: OpenCode]
+[License: Apache-2.0] [Platform: OpenCode]
 
 > ⚠ **This project is a work in progress** — under active development. Command behavior, directory structure, and documentation are subject to change.
 
@@ -45,7 +45,7 @@ flowchart TD
 
 **TDD cycle**: `test-generate → code-generate → code-review` forms a loop. Each spec in the current task runs through RED → GREEN → REFACTOR before moving to the next spec. When all specs in a task reach terminal state, code-review marks the task `IMPLEMENTED`, and specification-define can process the next task.
 
-**test-verify** (dotted lines) is a shared test runner reused across all three TDD phases, interpreting PASS/FAIL according to the calling context.
+**test-verify** (dotted lines) is a shared test runner reused across all three TDD phases, interpreting PASS/FAIL according to the calling context. It also powers `code-review`'s impact-scope regression and `progress-report`'s full regression.
 
 ---
 
@@ -91,9 +91,22 @@ Each spec flows through a strict state machine using the `[Operation: State]` fo
 | `[废弃: 待修复]` | test-verify | De-reference verification failed, repair affected modules and retry |
 | `[废弃: 已删除]` | progress-report | Code physically deleted from `_deprecated/` (progress-report closeout), terminal |
 
+### Deprecated Code Lifecycle
+
+Removal is a behavior reduction, not test-first work. Deprecated specs flow through a dedicated lifecycle:
+
+1. **Define**: `specification-define` records the removal target and its `Depended By` (derived from the `# Dependency Index`, verified by a real `grep` scan), and writes the verification checklist (targeted tests / full build / grep scan) into `Test Cases`
+2. **Skip test generation**: `test-generate` skips deprecated specs entirely — no tests or RED confirmation
+3. **De-reference & move**: `code-generate` removes all references, moves the code into `_deprecated/` (excluded from build/test config), syncs `# Dependency Index` / `Depended By`, then `test-verify` runs the verification checklist
+4. **Closeout**: `progress-report` physically deletes `_deprecated/` and sets `[废弃: 已删除]`
+
+### Dependency Index
+
+`architecture-design` maintains a module-level bidirectional reference index (`# Dependency Index`: Module / Depends On / Depended By) in `architecture.md`, kept in sync with every change. Modules slated for removal must list all their referrers under `Depended By` — this drives the de-reference work in `code-generate` and the physical-deletion decision in `progress-report`. For deprecated specs, the authoritative `Depended By` comes from an actual `grep` scan of the codebase, not the index alone.
+
 ### Code-Aware Rollback
 
-When any upstream command (requirement-define / architecture-design / task-breakdown / specification-define) modifies a document, it automatically scans for downstream code that has already been written. If found, it generates precise `git restore --source <baseline>` instructions (baseline = the git HEAD recorded in requirement.md frontmatter at round start) — protecting the codebase from accidental inconsistency between planning documents and implementation.
+When any upstream command (requirement-define / architecture-design / task-breakdown / specification-define) modifies a document, it automatically scans for downstream code that has already been written. If found, it generates precise `git restore --source <baseline>` instructions (baseline = the git HEAD recorded in requirement.md frontmatter at round start) — protecting the codebase from accidental inconsistency between planning documents and implementation. De-referenced code (`[废弃: 已解引用]`) additionally requires deleting `_deprecated/` and its moved copies; physically deleted code (`[废弃: 已删除]`) must be recovered from git history (`git log --diff-filter=D`).
 
 ### Socratic Requirements Gathering
 
@@ -101,11 +114,11 @@ When any upstream command (requirement-define / architecture-design / task-break
 
 ### Recursive Completion Propagation
 
-When `code-review` completes a spec, it walks upward: checks whether all specs under the current task have reached terminal state. If yes, it marks the task `[IMPLEMENTED]`. When all tasks are done, it prompts the user to run `progress-report` for archival.
+When `code-review` completes a spec, it walks upward: checks whether all specs under the current task have reached terminal state. If yes, it marks the task `[IMPLEMENTED]`. When all tasks are done, it prompts the user to run `progress-report` for archival. Removal specs reach their terminal state at `[废弃: 已解引用]` — physical deletion is deferred to the `progress-report` closeout.
 
 ### Cross-Round Archival
 
-When a round completes, `progress-report` auto-generates a summary, archives all planning files to `planning/archive/`, appends an entry to `changelist.md`, and preserves historical context for the next round.
+When a round completes, `progress-report` first enforces hard acceptance gates — full regression PASS, `# Goal` traceability confirmed, and all `# Open Questions` closed. It then physically deletes `_deprecated/`, auto-generates a summary, archives all planning files (plus `style_guide.md`) to `planning/archive/`, appends an entry to `changelist.md`, and preserves historical context for the next round.
 
 ---
 
@@ -133,9 +146,9 @@ After installation, run `/requirement-define` in opencode to start the pipeline.
 | `/specification-define` | Planning | Define Interface, Test Double, and Test Cases for each task. Produces `planning/specifications.md` |
 | `/test-generate` | **RED** | Generate test code from specs, run to confirm FAIL. Generate Test Double code. Assembles `[manual]` items into a checklist |
 | `/code-generate` | **GREEN** | Read test code to understand expected behavior, implement to pass tests. Guides `[manual]` verification step by step |
-| `/code-review` | **REFACTOR** | Code review + refactoring + regression testing. Rolls back on regression failure. Propagates completion upward on success |
-| `/test-verify` | Verify | Shared test runner reused by test-generate / code-generate / code-review. Interprets PASS/FAIL based on calling context |
-| `/progress-report` | Close | Aggregate progress, archive to `planning/archive/`, append to `changelist.md` |
+| `/code-review` | **REFACTOR** | Code review + refactoring + regression testing. Runs impact-scope regression (covers `[已验证]` specs sharing affected files) after each refactor; rolls back on failure. Reviews test code quality. Propagates completion upward on success |
+| `/test-verify` | Verify | Shared test runner reused by test-generate / code-generate / code-review / progress-report. Interprets PASS/FAIL by calling context; classifies failures as assertion vs error (stub fallback for RED); executes impact-scope regression (code-review) and full regression (progress-report); runs the deprecated verification checklist (targeted tests + full build + grep scan) |
+| `/progress-report` | Close | Gate on full regression + Goal traceability + closed Open Questions, then physically delete `_deprecated/` (setting `[废弃: 已删除]`), archive to `planning/archive/`, append to `changelist.md` |
 
 ---
 

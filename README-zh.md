@@ -2,7 +2,7 @@
 
 **A specification-driven TDD workflow framework for AI coding agents**
 
-[License: MIT] [Platform: OpenCode]
+[License: Apache-2.0] [Platform: OpenCode]
 
 > ⚠ **该项目未完工** — 仍在积极开发中，命令行为、目录结构和文档内容均可能发生变更。
 
@@ -45,7 +45,7 @@ flowchart TD
 
 **循环段**：`test-generate → code-generate → code-review` 形成 TDD 循环，当前 task 下的每个 spec 依次走完 RED → GREEN → REFACTOR 后回到入口处理下一个 spec。当该 task 所有 specs 达到终态后，code-review 标记 task 为 `IMPLEMENTED`，然后 specification-define 可为下一个 task 生成新 spec，重新进入循环。
 
-**test-verify** 作为共享验证节点（虚线连接），在 RED / GREEN / REFACTOR 三个阶段被复用，根据调用上下文判断 PASS/FAIL 语义。
+**test-verify** 作为共享验证节点（虚线连接），在 RED / GREEN / REFACTOR 三个阶段被复用，根据调用上下文判断 PASS/FAIL 语义；同时为 `code-review` 的影响范围回归和 `progress-report` 的全量回归提供执行。
 
 ---
 
@@ -91,9 +91,22 @@ RED（写测试，确认失败）→ GREEN（写实现，使测试通过）→ R
 | `[废弃: 待修复]` | test-verify | 解引用验证未通过，需修复受影响模块后重试 |
 | `[废弃: 已删除]` | progress-report | `_deprecated/` 中代码已物理删除（progress-report 收尾），终态 |
 
+### 废弃代码生命周期
+
+废弃是行为减量，不适用测试先行。废弃规格走独立的生命周期：
+
+1. **定义**：`specification-define` 记录待删目标及其 `Depended By`（以 `# Dependency Index` 为起点、`grep` 实测为准），并将验证手段清单（定向测试 / 全量构建 / grep 引用扫描）写入 `Test Cases`
+2. **跳过测试生成**：`test-generate` 完全跳过废弃规格——不生成任何测试代码，也不做 RED 确认
+3. **解引用与移动**：`code-generate` 移除全部引用、将代码移入 `_deprecated/`（从构建/测试配置排除）、同步 `# Dependency Index` 与 `Depended By`，随后 `test-verify` 执行验证清单
+4. **收尾删除**：`progress-report` 物理删除 `_deprecated/` 并置为 `[废弃: 已删除]`
+
+### 模块引用索引（Dependency Index）
+
+`architecture-design` 在 `architecture.md` 中维护模块级双向引用索引（`# Dependency Index`：Module / Depends On / Depended By），随每次变更保持最新。待废弃/删除的模块必须在 `Depended By` 中列出全部引用方——这是 `code-generate` 解引用与 `progress-report` 物理删除决策的依据。对废弃规格而言，权威的 `Depended By` 来自对代码库的实际 `grep` 扫描，而非仅依赖索引。
+
 ### 代码感知回滚
 
-任何上游阶段（requirement-define / architecture-design / task-breakdown / specification-define）修改文档时，自动扫描下游是否已有落地代码。若已落地，基于 round 开始时的 baseline（requirement.md frontmatter 记录的 git HEAD）生成精确的 `git restore --source <baseline>` 指令列表恢复代码，保证规划文档与代码始终一致。
+任何上游阶段（requirement-define / architecture-design / task-breakdown / specification-define）修改文档时，自动扫描下游是否已有落地代码。若已落地，基于 round 开始时的 baseline（requirement.md frontmatter 记录的 git HEAD）生成精确的 `git restore --source <baseline>` 指令列表恢复代码，保证规划文档与代码始终一致。已解引用的代码（`[废弃: 已解引用]`）还需删除 `_deprecated/` 及其中的移动副本；已物理删除的代码（`[废弃: 已删除]`）须用 `git log --diff-filter=D` 从 git 历史定位找回。
 
 ### 苏格拉底式需求探询
 
@@ -101,11 +114,11 @@ RED（写测试，确认失败）→ GREEN（写实现，使测试通过）→ R
 
 ### 递归完成传播
 
-`code-review` 审查通过后自动向上追溯：检查当前 task 下所有 specs 是否全部达到终态，若是则将该 task 标记为 `[IMPLEMENTED]`。所有 task 完成后，提示用户运行 `progress-report` 收尾。
+`code-review` 审查通过后自动向上追溯：检查当前 task 下所有 specs 是否全部达到终态，若是则将该 task 标记为 `[IMPLEMENTED]`。所有 task 完成后，提示用户运行 `progress-report` 收尾。废弃规格以 `[废弃: 已解引用]` 为终态——物理删除延后到 `progress-report` 收尾统一执行。
 
 ### 跨轮次归档
 
-`progress-report` 在全部完成后自动生成总结、归档到 `planning/archive/`、追加 `changelist.md` 条目，为下一轮保留历史上下文。
+`progress-report` 在收尾前先强制通过硬性验收门——全量回归 PASS、`# Goal` 可追溯性确认、`# Open Questions` 全部关闭。随后物理删除 `_deprecated/`，自动生成总结、归档所有规划文件（含 `style_guide.md`）到 `planning/archive/`、追加 `changelist.md` 条目，为下一轮保留历史上下文。
 
 ---
 
@@ -133,9 +146,9 @@ cp -r commands/ skills/ ~/.config/opencode/
 | `/specification-define` | 规划 | 为每个 task 定义实现规格：Interface、Test Double、Test Cases。产出 `planning/specifications.md` |
 | `/test-generate` | **RED** | 根据规格生成测试代码，运行确认 FAIL。生成 Test Double 实现。 `[自动化]` 用例生成代码，`[人工]` 用例汇编为 checklist |
 | `/code-generate` | **GREEN** | 读取测试代码理解期望行为，生成实现代码使测试通过。含 `[人工]` checklist 引导验证 |
-| `/code-review` | **REFACTOR** | 代码审查 + 重构 + 回归测试。每次重构后运行回归测试，FAIL 则回退。通过后递归上溯传播完成信号 |
-| `/test-verify` | 验证 | 独立测试运行器，被 test-generate / code-generate / code-review 复用，根据调用上下文判断 PASS/FAIL 语义 |
-| `/progress-report` | 收尾 | 聚合进度统计，全部完成后归档到 `archive/`，追加 `changelist.md` 条目 |
+| `/code-review` | **REFACTOR** | 代码审查 + 重构 + 回归测试。每次重构后运行**影响范围回归**（覆盖受影响文件重叠的 `[已验证]` 规格），FAIL 则回退；并审查测试代码质量。通过后递归上溯传播完成信号 |
+| `/test-verify` | 验证 | 独立测试运行器，被 test-generate / code-generate / code-review / progress-report 复用。按调用上下文判断 PASS/FAIL；区分失败类型（断言失败 vs error，RED 时支持 stub 占位回退）；执行影响范围回归（code-review）与全量回归（progress-report）；废弃规格执行验证清单（定向测试 + 全量构建 + grep 引用扫描） |
+| `/progress-report` | 收尾 | 通过全量回归 + Goal 可追溯确认 + Open Questions 关闭的硬性验收门后，物理删除 `_deprecated/`（将 `[废弃: 已解引用]` 更新为 `[废弃: 已删除]`），归档到 `archive/`，追加 `changelist.md` 条目 |
 
 ---
 
