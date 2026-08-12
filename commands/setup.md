@@ -35,7 +35,8 @@ OpenCode 启动时自动读取工作目录下的该文件并插入上下文。
 
 ## 执行约束
 - 一次只处理一个 task。活跃 task = tasks.md 首个 [DEFINED]。
-- 变更代码后同步维护模块引用索引（architecture.md 的 `# Dependency Index` 与规格的 `Depended By`）。废弃模块先解引用再移入 `_deprecated/`，禁止直接删除。
+- 变更代码后同步维护模块引用索引（architecture.md 的 `# Dependency Index` 与规格的 `Depended By`；废弃规格的 `Depended By` 以 grep 实际引用扫描为准）。废弃模块先解引用再移入 `_deprecated/`，禁止直接删除。
+- 轮内禁止 git 提交。git 提交仅由 progress-report 在归档收尾后执行。
 ```
 
 ## 约束

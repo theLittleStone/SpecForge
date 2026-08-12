@@ -31,8 +31,8 @@ Agent 不直接接受用户初始描述，必须通过追问与用户达成深�
      - 编辑本轮 → 保留已有 `round` 不变，继续分析
      - 开启新轮次 → 提示用户先运行 `/progress-report` 归档当前内容，再重新执行本命令
    - 不存在 → 读取 `./changelist.md`
-     - changelist.md 存在 → 此为后续轮次，从最近一轮 Archive 路径获取历史 `architecture.md`，辅助填写 `# Scope`。首次创建时填写 `round` 为当前系统时间戳（格式 `YYYYMMDD-HHMM`，24小时制，精确到分钟）
-     - changelist.md 也不存在 → 首次项目对话，新建 `planning/requirement.md`，`round` 为当前系统时间戳
+      - changelist.md 存在 → 此为后续轮次，从最近一轮 Archive 路径获取历史 `architecture.md`，辅助填写 `# Scope`。首次创建时填写 `round` 为当前系统时间戳（格式 `YYYYMMDD-HHMM`，24小时制，精确到分钟），并记录 `baseline` 为当前 git HEAD（`git rev-parse HEAD`；非 git 仓库为 `none`）
+      - changelist.md 也不存在 → 首次项目对话，新建 `planning/requirement.md`，`round` 为当前系统时间戳，并记录 `baseline` 为当前 git HEAD（同上）
 2. 识别 `change_type`，分析当前内容与用户输入
 
 3. **澄清探询**：
@@ -52,8 +52,9 @@ Agent 不直接接受用户初始描述，必须通过追问与用户达成深�
      a. 汇总所有状态为 `[测试已生成]` / `[已实现]` / `[已测试]` / `[待修复]` / `[已验证]` / `[已解引用]` 或 `[废弃: 已删除]` 的规格的 `Affected Files` 字段，去重
      b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
      c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出精确恢复指令：
-         git restore <file1> <file2> ...
-         （若规格含 `[已解引用]` / `[已删除]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本）
+         git restore --source <baseline> <file1> <file2> ...
+         （baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
+         （若规格含 `[已解引用]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本；若含 `[已删除]` 状态，代码已物理删除且 `_deprecated/` 已清理，需用 `git log --diff-filter=D` 从 git 历史定位找回）
          （若存在 git 未跟踪的新文件，提醒手动删除）
      d. 醒示「代码已恢复至本轮开始前。planning/ 文档保留，请重跑下游全链：`/architecture-design` → `/task-breakdown` → `/specification-define`」
 
@@ -67,10 +68,17 @@ Agent 不直接接受用户初始描述，必须通过追问与用户达成深�
 # Goal              — 本轮变更目标与期望效果
 # Scope             — 涉及的范围：模块/文件/接口区域
 # Constraints       — 技术约束、边界条件、注意事项
-# Open Questions    — 未决问题（必须保留，可为空）
+# Open Questions    — 未决问题（必须保留，可为空；已关闭条目用 `[resolved]` / `[won't-fix]` 标记）
 ```
 
 其中 `Open Questions` 必须保留，用于记录未确定问题。
+
+每条未决问题有两种关闭方式：
+
+- `[resolved] <结论>`：已与用户确认，问题关闭（如「- 折扣与满减叠加还是取最大？[resolved] 取最大」）
+- `[won't-fix] <理由>`：明确不做，问题关闭（如「- 超时订单自动取消？[won't-fix] 本期不支持」）
+
+未标记的条目为「仍开放」。progress-report 判定「已完成」前，`Open Questions` 必须为空或全部条目已关闭。
 
 ## 输入来源
 
@@ -103,10 +111,11 @@ Agent 不直接接受用户初始描述，必须通过追问与用户达成深�
 
 ### 目标文件结构（planning/requirement.md）
 
-**Frontmatter（YAML）：**
+**Frontmatter（YAML）：**（每次确认写入时 `version` 递增、`updated` 更新为当前日期；`created` 仅首次创建时写入）
 
 ```yaml
 round: <YYYYMMDD-HHMM>（首次创建时由系统时间生成，修改时保留原值不变）
+baseline: <HEAD sha>（首次创建时记录当前 git HEAD，`git rev-parse HEAD`；非 git 仓库为 none，修改时保留原值不变）
 version: <int>
 created: <ISO date>
 updated: <ISO date>
@@ -120,7 +129,7 @@ change_type: feature | enhancement | refactor | bugfix | removal
 # Goal              — 本轮变更目标与期望效果
 # Scope             — 涉及的范围：模块/文件/接口区域
 # Constraints       — 技术约束、边界条件、注意事项
-# Open Questions    — 未决问题（必须保留，可为空）
+# Open Questions    — 未决问题（必须保留，可为空；已关闭条目用 `[resolved]` / `[won't-fix]` 标记）
 ```
 
 ### 交互预览
@@ -137,4 +146,5 @@ change_type: feature | enhancement | refactor | bugfix | removal
 - 不允许一次性重写全部内容（除非 create）
 - 必须填充 `# Scope` 描述变更涉及的范围
 - 如果信息不足，应保留在 Open Questions 中
-- 若 `planning/specifications.md` 中存在 `[测试已生成]` / `[已实现]` / `[已测试]` / `[待修复]` / `[已验证]` / `[已解引用]` 或 `[废弃: 已删除]` 状态，需求回滚前必须先 git restore 受影响的代码文件；agent 不自行 undo 代码变更
+- 已关闭的 Open Questions 条目（`[resolved]` / `[won't-fix]`）不再阻塞收尾；仍开放的条目阻塞 progress-report 判定已完成
+- 若 `planning/specifications.md` 中存在 `[测试已生成]` / `[已实现]` / `[已测试]` / `[待修复]` / `[已验证]` / `[已解引用]` 或 `[废弃: 已删除]` 状态，需求回滚前必须先 git restore --source <baseline> 受影响的代码文件；agent 不自行 undo 代码变更

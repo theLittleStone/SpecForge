@@ -17,7 +17,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
    - architecture.md
    - tasks.md
    - specifications.md
-   - style_guide.md
+   - style_guide.md（位于项目根目录 `./style_guide.md`）
 3. 聚合状态信息，按 `change_type` 分组统计
 4. 判断当前进度状态：
    - 无任务
@@ -39,8 +39,10 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 - spec 状态为 `[修改: 已定义]` / `[修改: 测试已生成]` / `[修改: 已实现]` / `[修改: 已测试]` / `[修改: 待修复]`
 - spec 状态为 `[废弃: 待删除]` / `[废弃: 待修复]`
 - task 状态为 TODO 或 DEFINED
+- `planning/requirement.md` 的 `# Open Questions` 存在未关闭条目
+- 全量回归 FAIL 或 `# Goal` 可追溯清单未全部确认达成
 
-判定优先级：`已完成` 优先——当所有 task 均为 `[IMPLEMENTED]` 且所有规格达终态（新增/修改=`已验证`，废弃=`已解引用` 或 `已删除`）时直接判定已完成，由收尾流程执行 `_deprecated/` 物理删除，不落入未完成分支。
+判定优先级：`已完成` 优先——当满足「已完成」判定节的静态条件（规格/任务终态、`# Open Questions` 全部关闭）时先行判定已完成，再由「已完成状态 → 执行操作」step 1/2 通过动态验收门（全量回归 PASS、`# Goal` 可追溯确认）；验收失败则转入未完成分支。
 
 ### 已完成
 
@@ -50,6 +52,9 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 - 所有 `[修改: xxx]` 规格为 `[修改: 已验证]`
 - 所有 `[废弃: xxx]` 规格为 `[废弃: 已解引用]` 或 `[废弃: 已删除]`（物理删除在收尾流程内执行）
 - 所有 task 为 IMPLEMENTED
+- `planning/requirement.md` 的 `# Open Questions` 为空，或全部条目已标记 `[resolved]` / `[won't-fix]`
+
+以上为静态判定条件。动态验收门（全量回归 PASS、`# Goal` 可追溯确认）在「已完成状态 → 执行操作」step 1/2 执行，任一失败则转入未完成分支，不归档。
 
 ## 输出
 
@@ -67,6 +72,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 3. 追加 `./changelist.md` 条目，标注 `(incomplete)`
 4. 若项目根目录存在 `_deprecated/`，一并清理（移入的死代码不归档、不跨轮保留）
 5. 清空 `planning/` 目录（除 `archive/` 外），允许新轮次开始
+6. 将项目根目录 `./style_guide.md` 复制到该归档目录作历史留存（根目录保留一份供新轮复用）
 
 #### Markdown（用户可读）
 
@@ -106,14 +112,20 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 #### 执行操作
 
-1. 物理删除项目根目录 `_deprecated/`（若存在），并将 `planning/specifications.md` 中所有 `[废弃: 已解引用]` 规格状态更新为 `[废弃: 已删除]`
-2. 生成总结文件 `planning/summary.md`
-3. 创建 `planning/archive/planning_{round}/` 子目录（`round` 取自 `planning/requirement.md` frontmatter）
-4. 将 `planning/` 下所有文件（除 `archive/` 目录外）移入该子目录
-5. 在项目根目录 `./changelist.md` 中追加当前轮次条目（格式详见「Changelist 格式」章节）
+1. 全量回归：调用 `/test-verify`（全量回归模式）执行全部规格测试 + 全量构建/类型检查。
+   FAIL → 转入未完成分支，醒示修复路径，不归档
+2. 生成 `# Goal` 可追溯性清单：沿 `planning/requirement.md` `# Goal` → `planning/architecture.md` `# Changes` → `planning/tasks.md` → `planning/specifications.md` `Affected Files` 链推导，
+   输出「Goal 承诺 → task → spec → 测试文件」映射表，逐条请用户确认达成。任一未达成 → 不归档
+3. 物理删除项目根目录 `_deprecated/`（若存在），并将 `planning/specifications.md` 中所有 `[废弃: 已解引用]` 规格状态更新为 `[废弃: 已删除]`
+4. 生成总结文件 `planning/summary.md`（含 Goal 可追溯性清单）
+5. 创建 `planning/archive/planning_{round}/` 子目录（`round` 取自 `planning/requirement.md` frontmatter）
+6. 将 `planning/` 下所有文件（除 `archive/` 目录外）**复制**（非移动）到该子目录
+7. 清空 `planning/` 目录（除 `archive/` 外），允许新轮次开始
+8. 将项目根目录 `./style_guide.md` 复制到该归档目录作历史留存（根目录保留一份供新轮复用）
+9. 在项目根目录 `./changelist.md` 中追加当前轮次条目（格式详见「Changelist 格式」章节）
    - 若 `./changelist.md` 不存在则新建
    - 条目包含：`round`（标题 `## Round <round>`）、`change_type`、本轮主要变动摘要（2-5 条，提取自 `planning/requirement.md` 的 `# Goal` 章节）、Archive 路径指针
-6. 可选执行 git 提交（含 `_deprecated/` 删除与归档内容）
+10. 可选执行 git 提交（含 `_deprecated/` 删除与归档内容）——归档后执行，轮次已终结，不影响回滚语义
 
 #### Markdown
 
@@ -130,6 +142,12 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 | 修改     | X       |
 | 废弃     | X       |
 
+## Goal 可追溯性清单
+
+| Goal 承诺 | Task | Spec | 测试文件 | 确认 |
+|-----------|------|------|---------|------|
+| 用户 3 步内完成下单 | Task 1 / Task 3 | spec_a / spec_c | src/__tests__/a.test.ts | ✓ 达成 |
+
 ## 总结
 ...
 
@@ -142,13 +160,6 @@ planning/archive/planning_XXXX/
 `./changelist.md` 是跨轮次持久文件，每次归档后追写一轮。格式如下：
 
 ```md
----
-round: 20260507-0138
-version: 1
-created: 2026-05-07
-updated: 2026-05-07
----
-
 # Changelist
 
 ## Round 20260507-0138 [feature]
@@ -176,6 +187,8 @@ updated: 2026-05-07
 
 - 状态判断必须基于 tasks.md 和 specifications.md
 - 不允许仅根据文件存在判断完成
+- `# Open Questions` 存在未关闭条目（未标记 `[resolved]` / `[won't-fix]`）时不允许判定已完成
+- 全量回归 FAIL 或 `# Goal` 可追溯清单未全部确认达成时，不允许归档
 - 归档操作必须保留历史数据
 - 不允许删除未归档的 planning 内容
 - 不允许删除 `./changelist.md`

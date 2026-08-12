@@ -19,7 +19,7 @@ description: TDD 红阶段——根据规格的 Interface 和 Test Cases 生成�
 
 执行流程：
 
-0. 读取 `./style_guide.md`。如不存在，调用 `style-resolver` skill 自动生成
+0. 读取 `./style_guide.md`。如不存在，调用 `style-resolver` skill 从项目配置自动生成代码风格规范，经用户确认后写入，再继续后续流程
 1. 读取 `planning/specifications.md`
 2. 选择状态为 `[新增: 已定义]`、`[修改: 已定义]` 的规格（`[废弃: 待删除]` 跳过，直接由 `/code-generate` 处理）
 3. 检测测试框架：检查项目依赖配置文件（如 `package.json` / `go.mod` / `Cargo.toml` / `requirements.txt` 等）中声明的测试依赖，结合已有测试文件的导入语句确定测试框架。无法确定则询问用户
@@ -41,12 +41,15 @@ description: TDD 红阶段——根据规格的 Interface 和 Test Cases 生成�
    e. **等待用户确认**：用户确认测试代码无误后，写入测试文件。若用户提出修改意见 → 回到 d 修订
 
    f. **运行测试确认 RED**：调用 `/test-verify`（RED 确认上下文），执行 `[自动化]` 测试
-      - **预期 FAIL**（RED 确认成功）→ 标记该 spec 状态为 `[新增: 测试已生成]` 或 `[修改: 测试已生成]`，继续下一个 spec
+      - **断言失败**（预期 FAIL，RED 确认成功）→ 标记该 spec 状态为 `[新增: 测试已生成]` 或 `[修改: 测试已生成]`，继续下一个 spec
+      - **error**（编译/加载/运行异常）→ 醒示用户「测试代码无法编译或运行——可能原因：缺少 stub 占位、引用不存在的符号或环境问题。请检查后重试」。不更新状态
       - **意外 PASS**（测试未按预期失败）→ 醒示用户「测试意外通过——可能原因：代码已存在实现，或测试断言有误。请确认后重试」。不更新状态
+
+      （若 error 源于「实现符号不存在」：agent 提议生成最小 stub 占位——仅满足编译、不实现行为，经用户确认后写入目标源文件位置并明确标注占位，再重新运行 RED 确认。stub 由后续 code-generate 替换为真实实现，不得提前标记 `[已实现]`）
 
    g. **汇编 [人工] checklist**：将 `[人工]` 条目汇编为结构化清单输出，标注「以下测试需在 code-generate 完成实现后执行」。不生成任何代码
 
-   h. **写入 Affected Files**：测试文件路径 + Test Double 文件路径（如有）追加写入
+   h. **写入 Affected Files**：测试文件路径 + Test Double 文件路径（如有）+ stub 占位源文件路径（如有）追加写入
 
 5. 所有 spec 处理完毕后，汇总输出执行结果
 
@@ -146,10 +149,11 @@ Agent 生成测试时必须遵循以下纪律。这些规则确保测试在代�
 
 ## RED 确认
 
-| 规格 | 测试文件 | 预期 | 实际 | RED 确认 |
-|------|---------|------|------|---------|
-| spec_a | src/__tests__/a.test.ts | FAIL | FAIL | ✓ RED |
-| spec_b | src/__tests__/b.test.ts | FAIL | PASS | ⚠ 意外通过 |
+| 规格 | 测试文件 | 预期 | 实际 | 失败类型 | RED 确认 |
+|------|---------|------|------|---------|---------|
+| spec_a | src/__tests__/a.test.ts | FAIL | FAIL | 断言失败 | ✓ RED |
+| spec_b | src/__tests__/b.test.ts | FAIL | PASS | - | ⚠ 意外通过 |
+| spec_c | src/__tests__/c.test.ts | FAIL | FAIL | error（编译失败） | ✗ 未确认 |
 
 ## [人工] 测试 Checklist（待 code-generate 完成后执行）
 
@@ -176,4 +180,5 @@ Agent 生成测试时必须遵循以下纪律。这些规则确保测试在代�
 - 修改类型规格必须包含回归测试
 - 废弃规格跳过测试生成，不生成任何测试代码
 - RED 确认失败时不可继续，必须醒示用户排查
+- error 不允许确认 RED——必须先解决编译/加载/运行问题（可生成 stub 占位）后重试
 - 不允许跳过 RED 确认直接标记 `[测试已生成]`

@@ -41,11 +41,12 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
     - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]` → 代码未产生，安全。
      提醒用户「规格已定义，请继续运行 `/test-generate` 生成测试（废弃规格跳过测试生成，可直接 `/code-generate`）」
     - 存在 `[已实现]`、`[已测试]`、`[测试已生成]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
-     a. 从当前 task 关联的规格中提取 `Affected Files` 字段，去重
+     a. 从当前 task 关联的规格中提取 `Affected Files` 字段，去重（规格仅作用于所属 task；其余 task 的代码与其规格一致、不受影响，故不纳入回滚）
      b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
       c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
-         git restore <file1> <file2> ...
-         （若规格含 `[已解引用]` / `[已删除]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本）
+         git restore --source <baseline> <file1> <file2> ...
+         （baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
+         （若规格含 `[已解引用]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本；若含 `[已删除]` 状态，代码已物理删除且 `_deprecated/` 已清理，需用 `git log --diff-filter=D` 从 git 历史定位找回）
          （若存在 git 未跟踪的新文件，提醒手动删除）
       d. 醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/test-generate` → `/code-generate`」
 
@@ -55,7 +56,7 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
 
 - **Spec**: 必须显式指明待删目标文件/函数，具体到可直接定位。禁止模糊描述（如"清理旧代码"）
 - **Interface**: 语义改为「不破坏契约」——列出受影响模块与被依赖方，不再定义新接口
-- **Depended By**: 必填，从 `architecture.md` 的 `# Dependency Index` 推导，列出引用本规格目标文件的全部模块，作为 code-generate 解引用的依据
+- **Depended By**: 必填，列出引用本规格目标文件的全部模块，作为 code-generate 解引用的依据。以 `grep` 扫描代码库实际引用方为准（此刻代码仍为废弃前状态，引用方完整）；`architecture.md` 的 `# Dependency Index` 与历史归档作起点参考，不一致时以代码实测为准
 - **Test Cases**: 不要求新写 `[自动化]` 用例（可保留 `[人工]` 视觉验证：确认功能已从界面消失）。改为引用既有测试并列出验证手段清单：
   1. 受影响模块定向测试（由 `Depended By` 导出）
   2. 全量构建 / 类型检查
@@ -77,7 +78,7 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
 
 - **Task**: Task N — 所属任务编号，建立到 task 的反向指针
 - **Change Type**: feature | enhancement | bugfix | refactor | removal
-- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填，从 architecture.md 的 # Dependency Index 推导>
+- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填：以 grep 扫描代码库实际引用方为准，architecture.md 的 # Dependency Index 与历史归档作起点参考>
 - **Spec**: <自由描述> — 指明文件/函数/位置及期望行为，具体到可直接生成 diff
 - **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约
   - 生产实现: <生产代码实现类/模块名>
@@ -144,7 +145,7 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 | 文件 | 用途 | 关键内容 |
 |------|------|---------|
 | `planning/tasks.md` | 任务列表 | 按 `## Task N` 标题顺序扫描，选取第一个标题标记 `[TODO]` 的任务，从详情字段提取 `Change Type`、`Depends On`、`Description`。不跨 task 处理。 |
-| `planning/architecture.md` | 依赖索引 | `# Dependency Index` 章节，用于推导规格的 `Depended By` |
+| `planning/architecture.md` | 依赖索引 | `# Dependency Index` 章节，作为推导规格 `Depended By` 的起点参考；废弃规格最终以 `grep` 代码扫描实际引用方为准 |
 
 ### 状态过滤
 
@@ -165,7 +166,7 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 
 ### 目标文件结构（planning/specifications.md）
 
-**Frontmatter（YAML）：**
+**Frontmatter（YAML）：**（每次确认写入时 `version` 递增、`updated` 更新为当前日期；`created` 仅首次创建时写入）
 
 ```yaml
 round: <继承自 tasks.md>
@@ -184,7 +185,7 @@ based_on: planning/tasks.md
 
 - **Task**: [[tasks.md#task-n]] — 所属任务编号，建立到 task 的反向指针
 - **Change Type**: feature | enhancement | bugfix | refactor | removal
-- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填，从 architecture.md 的 # Dependency Index 推导>
+- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填：以 grep 扫描代码库实际引用方为准，architecture.md 的 # Dependency Index 与历史归档作起点参考>
 - **Spec**: <自由描述> — 指明文件/函数/位置及期望行为，具体到可直接生成 diff
 - **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约
   - 生产实现: <生产代码实现类/模块名>
@@ -240,5 +241,5 @@ based_on: planning/tasks.md
 - 必须将所有规格名称写回 tasks.md 中对应 task 的 `Specs` 字段，建立双向链接
 - 废弃规格（removal）附加约束：
    - `Spec` 必须显式指明待删目标文件/函数，禁止模糊描述
-   - `Depended By` 必填，且须与 `architecture.md` 的 `# Dependency Index` 一致
+   - `Depended By` 必填，且须与 `grep` 代码扫描的实际引用方一致（`architecture.md` 的 `# Dependency Index` 作起点参考，二者不一致时以 grep 实测为准）
    - `Test Cases` 不要求新写用例，为验证手段清单（定向测试 / 全量构建 / grep 扫描），不受上述 `[自动化]`/`[人工]` 标记要求约束

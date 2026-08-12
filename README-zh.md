@@ -86,14 +86,14 @@ RED（写测试，确认失败）→ GREEN（写实现，使测试通过）→ R
 | `[修改: 已测试]` | test-verify | 修改已通过测试 |
 | `[修改: 待修复]` | test-verify | 修改测试失败 |
 | `[修改: 已验证]` | code-review | 修改已通过审查（终态） |
-| `[废弃: 待删除]` | specification-define | 待删除，需生成副作用验证测试 |
-| `[废弃: 测试已生成]` | test-generate | 副作用验证测试已生成 |
-| `[废弃: 待修复]` | test-verify | 副作用验证未通过 |
-| `[废弃: 已删除]` | code-generate | 代码已删除并通过副作用检查（终态） |
+| `[废弃: 待删除]` | specification-define | 规格已定义（含待删目标与 `Depended By`），待解引用 |
+| `[废弃: 已解引用]` | code-generate | 引用方已全部移除，代码已移入 `_deprecated/`，定向测试 + 全量构建通过 |
+| `[废弃: 待修复]` | test-verify | 解引用验证未通过，需修复受影响模块后重试 |
+| `[废弃: 已删除]` | progress-report | `_deprecated/` 中代码已物理删除（progress-report 收尾），终态 |
 
 ### 代码感知回滚
 
-任何上游阶段（requirement-define / architecture-design / task-breakdown / specification-define）修改文档时，自动扫描下游是否已有落地代码。若已落地，生成精确的 `git restore` 指令列表恢复代码，保证规划文档与代码始终一致。
+任何上游阶段（requirement-define / architecture-design / task-breakdown / specification-define）修改文档时，自动扫描下游是否已有落地代码。若已落地，基于 round 开始时的 baseline（requirement.md frontmatter 记录的 git HEAD）生成精确的 `git restore --source <baseline>` 指令列表恢复代码，保证规划文档与代码始终一致。
 
 ### 苏格拉底式需求探询
 

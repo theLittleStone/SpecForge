@@ -31,11 +31,12 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
     - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
      提醒用户「任务已更新。代码尚未产生，请继续运行 `/specification-define`」
     - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
-     a. 从当前处理 task 关联的规格中提取 `Affected Files` 字段，去重
+     a. 汇总所有状态为 `[测试已生成]` / `[已实现]` / `[已测试]` / `[待修复]` / `[已验证]` / `[已解引用]` / `[已删除]` 的规格的 `Affected Files` 字段，去重
      b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
       c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
-         git restore <file1> <file2> ...
-         （若规格含 `[已解引用]` / `[已删除]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本）
+         git restore --source <baseline> <file1> <file2> ...
+         （baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
+         （若规格含 `[已解引用]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本；若含 `[已删除]` 状态，代码已物理删除且 `_deprecated/` 已清理，需用 `git log --diff-filter=D` 从 git 历史定位找回）
          （若存在 git 未跟踪的新文件，提醒手动删除）
       d. 醒示「代码已恢复。planning/ 文档保留，请重跑 `/specification-define`」
 
@@ -107,7 +108,7 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 
 ### 目标文件结构（planning/tasks.md）
 
-**Frontmatter（YAML）：**
+**Frontmatter（YAML）：**（每次确认写入时 `version` 递增、`updated` 更新为当前日期；`created` 仅首次创建时写入）
 
 ```yaml
 round: <继承自 architecture.md>

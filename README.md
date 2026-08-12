@@ -86,14 +86,14 @@ Each spec flows through a strict state machine using the `[Operation: State]` fo
 | `[修改: 已测试]` | test-verify | Modification tests passed |
 | `[修改: 待修复]` | test-verify | Modification tests failed |
 | `[修改: 已验证]` | code-review | Modification reviewed and verified (terminal) |
-| `[废弃: 待删除]` | specification-define | Marked for deletion, needs side-effect tests |
-| `[废弃: 测试已生成]` | test-generate | Side-effect verification tests generated |
-| `[废弃: 待修复]` | test-verify | Side-effect tests failed |
-| `[废弃: 已删除]` | code-generate | Code deleted, side-effect check passed (terminal) |
+| `[废弃: 待删除]` | specification-define | Spec defined (with removal target and `Depended By`), awaiting de-reference |
+| `[废弃: 已解引用]` | code-generate | Referrers all removed, code moved to `_deprecated/`, targeted tests + full build pass |
+| `[废弃: 待修复]` | test-verify | De-reference verification failed, repair affected modules and retry |
+| `[废弃: 已删除]` | progress-report | Code physically deleted from `_deprecated/` (progress-report closeout), terminal |
 
 ### Code-Aware Rollback
 
-When any upstream command (requirement-define / architecture-design / task-breakdown / specification-define) modifies a document, it automatically scans for downstream code that has already been written. If found, it generates precise `git restore` instructions — protecting the codebase from accidental inconsistency between planning documents and implementation.
+When any upstream command (requirement-define / architecture-design / task-breakdown / specification-define) modifies a document, it automatically scans for downstream code that has already been written. If found, it generates precise `git restore --source <baseline>` instructions (baseline = the git HEAD recorded in requirement.md frontmatter at round start) — protecting the codebase from accidental inconsistency between planning documents and implementation.
 
 ### Socratic Requirements Gathering
 
