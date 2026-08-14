@@ -10,9 +10,26 @@
 
 ## What is SpecForge?
 
-SpecForge is a **specification-driven TDD pipeline** built for AI coding agents (specifically [opencode](https://opencode.ai)). It transforms natural language requirements into precise implementation specs, then drives the agent through a test-first engineering workflow with strict state gating.
+SpecForge is a **specification-driven TDD pipeline** built for AI coding agents (specifically [opencode](https://opencode.ai)). It transforms natural language requirements into precise implementation specs, then drives separate agent conversations through a test-first engineering workflow with strict state gating.
 
-Instead of letting an AI agent code directly, SpecForge enforces a disciplined cycle: define the `Interface` contract → generate tests → confirm the tests fail (RED) → write code to pass them (GREEN) → review and refactor (REFACTOR). Every line of code is traceable back to a spec, verified by tests, and safely rollbackable.
+Instead of letting a single AI agent design, code, and grade itself, SpecForge splits responsibilities across multiple agents that distrust each other: define the `Interface` contract → generate tests → confirm the tests fail (RED) → write code to pass them (GREEN) → review and refactor (REFACTOR). Every line of code is traceable back to a spec, verified by a neutral test runner, and safely rollbackable.
+
+---
+
+## Design Philosophy
+
+SpecForge guarantees quality through **separation, not trust**, built on three structural principles:
+
+1. **Files as agent context isolation** — Each planning stage produces its own document. Every document is the primary working context of a **separate agent conversation**, self-contained enough that a conversation only needs to read the previous layer and write its own output. No agent carries the entire pipeline context.
+
+2. **Progressive refinement** — The planning layers are not copies of each other; each is a **more concrete rewriting** of the previous one: `Goal & Scope → Changes & Design → Executable Tasks → Precise Interface Contracts & Test Cases`. Requirements get progressively pinned down at every layer.
+
+3. **Adversarial TDD trust model** — In the programming phase, test / code / review are designed to be executed by **different agents that mutually distrust each other**:
+   - **Test agent** (`/test-generate`): trusts only the spec. Writes tests and Test Doubles, and forces RED (tests must fail before implementation).
+   - **Code agent** (`/code-generate`): trusts only the tests. Reads them to understand expected behavior, then implements.
+   - **Review agent** (`/code-review`): audits both code and test quality, refactors, and propagates completion upward.
+   - **Neutral verifier** (`/test-verify`): generates no code; judges only test results and updates spec states. Neither side can grade itself.
+   - **The user** is the final judge, verifying `[manual]` items that automation cannot reach.
 
 ---
 
@@ -41,11 +58,15 @@ flowchart TD
     REFACTOR -->|all tasks IMPLEMENTED| REPORT["/progress-report"]
 ```
 
-**Linear phase**: `requirement-define → architecture-design → task-breakdown → specification-define`. Four sequential planning stages, each producing a document for the next.
+**Three phases**:
 
-**TDD cycle**: `test-generate → code-generate → code-review` forms a loop. Each spec in the current task runs through RED → GREEN → REFACTOR before moving to the next spec. When all specs in a task reach terminal state, code-review marks the task `IMPLEMENTED`, and specification-define can process the next task.
+1. **Planning (linear)** — `requirement-define → architecture-design → task-breakdown → specification-define`. Four sequential stages, each producing a self-contained document for the next. A single conversation reads only the previous layer and writes its own, keeping agent context small.
 
-**test-verify** (dotted lines) is a shared test runner reused across all three TDD phases, interpreting PASS/FAIL according to the calling context. It also powers `code-review`'s impact-scope regression and `progress-report`'s full regression.
+2. **Programming (TDD cycle)** — `test-generate → code-generate → code-review` forms the RED → GREEN → REFACTOR loop. Each spec in the current task runs through the whole loop before the next spec. When all specs in a task reach terminal state, code-review marks the task `IMPLEMENTED`, and specification-define can process the next task.
+
+3. **Closeout** — `progress-report` enforces hard acceptance gates (full regression, Goal traceability, closed Open Questions), then archives the round.
+
+**test-verify** (dotted lines) is a shared **neutral test runner** reused across all three TDD phases, interpreting PASS/FAIL according to the calling context. It generates no code and advances spec states solely from test results — neither the test agent nor the code agent can grade itself. It also powers `code-review`'s impact-scope regression and `progress-report`'s full regression.
 
 ---
 
@@ -54,6 +75,10 @@ flowchart TD
 ### Full TDD Pipeline
 
 RED (write tests, confirm FAIL) → GREEN (implement, make tests pass) → REFACTOR (review & refactor). Each phase has strict state guards — a FAIL at any stage blocks progression and prompts for repair.
+
+### Adversarial TDD Roles
+
+test / code / review are intended to be executed by **different agents that distrust each other**: the test agent writes tests that must fail (RED), the code agent implements only to satisfy them (GREEN), the review agent audits both (REFACTOR), and `/test-verify` grades solely by test results. `[manual]` items are judged by the user as the final authority.
 
 ### Spec-Driven Development
 
@@ -70,7 +95,7 @@ The two layers are additive, not mutually exclusive.
 
 ### 16-State Spec Machine
 
-Each spec flows through a strict state machine using the `[Operation: State]` format:
+Each spec flows through a strict state machine using the `[Operation: State]` format. The state machine is the **inter-agent contract language**: each agent reads a spec's state to decide what to do and how to verify, then hands off by advancing it. States are advanced only by the command that owns them.
 
 | State Label | Set By | Meaning |
 |-------------|--------|---------|
@@ -144,10 +169,10 @@ After installation, run `/requirement-define` in opencode to start the pipeline.
 | `/architecture-design` | Planning | Design architecture changes, impact analysis, and Test Double strategy. Produces `planning/architecture.md` |
 | `/task-breakdown` | Planning | Break architecture into a DAG of executable tasks with dependencies. Produces `planning/tasks.md` |
 | `/specification-define` | Planning | Define Interface, Test Double, and Test Cases for each task. Produces `planning/specifications.md` |
-| `/test-generate` | **RED** | Generate test code from specs, run to confirm FAIL. Generate Test Double code. Assembles `[manual]` items into a checklist |
-| `/code-generate` | **GREEN** | Read test code to understand expected behavior, implement to pass tests. Guides `[manual]` verification step by step |
-| `/code-review` | **REFACTOR** | Code review + refactoring + regression testing. Runs impact-scope regression (covers `[已验证]` specs sharing affected files) after each refactor; rolls back on failure. Reviews test code quality. Propagates completion upward on success |
-| `/test-verify` | Verify | Shared test runner reused by test-generate / code-generate / code-review / progress-report. Interprets PASS/FAIL by calling context; classifies failures as assertion vs error (stub fallback for RED); executes impact-scope regression (code-review) and full regression (progress-report); runs the deprecated verification checklist (targeted tests + full build + grep scan) |
+| `/test-generate` | **RED** (test agent) | Generate test code from specs, run to confirm FAIL. Generate Test Double code. Assembles `[manual]` items into a checklist |
+| `/code-generate` | **GREEN** (code agent) | Read test code to understand expected behavior, implement to pass tests. Guides `[manual]` verification step by step |
+| `/code-review` | **REFACTOR** (review agent) | Code review + refactoring + regression testing. Runs impact-scope regression (covers `[已验证]` specs sharing affected files) after each refactor; rolls back on failure. Reviews test code quality. Propagates completion upward on success |
+| `/test-verify` | Verify (neutral) | Neutral test runner reused by test-generate / code-generate / code-review / progress-report. Interprets PASS/FAIL by calling context; classifies failures as assertion vs error (stub fallback for RED); executes impact-scope regression (code-review) and full regression (progress-report); runs the deprecated verification checklist (targeted tests + full build + grep scan) |
 | `/progress-report` | Close | Gate on full regression + Goal traceability + closed Open Questions, then physically delete `_deprecated/` (setting `[废弃: 已删除]`), archive to `planning/archive/`, append to `changelist.md` |
 
 ---
