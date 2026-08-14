@@ -1,6 +1,6 @@
 ---
 name: task-breakdown
-description: 将架构设计拆解为可执行任务列表，支持新增/修改/重构/删除等多种变更类型
+description: 将架构设计拆解为可执行任务列表，支持新增/修改/重构/删除/chore/docs 等多种变更类型
 ---
 
 ## 功能说明
@@ -14,6 +14,7 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 - `refactor`：重构（不改行为）
 - `bugfix`：修复缺陷
 - `removal`：删除/废弃
+- `chore` / `docs`：非行为变更（文档、配置、杂项），其规格默认走轻量流程
 
 任务是后续规格定义与代码实现的基础。
 
@@ -21,41 +22,47 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 
 执行流程：
 
+0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「状态机与记法规范」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。
 1. 读取 `planning/architecture.md`（如不存在，向用户汇报，禁止自行添加），获取其 `round`、`change_type`、`status`。若 `status` 为 `draft`，提醒用户「architecture.md 尚未确认（status: draft），建议先运行 architecture-design 完成确认」。
 2. 读取 `planning/tasks.md`（如不存在则允许新建）。若已存在，检查其 frontmatter `round` 是否与 architecture.md 一致——不一致则醒示「tasks.md 属于另一轮次（round: X vs Y），请先运行 `/progress-report` 归档旧内容或清空 `planning/` 后重试」
 3. 分析任务与架构的一致性，确保 task 的 `change_type` 与架构一致（可更具体，不可冲突）
 4. 生成差异修改提案
 5. 输出预览
 6. 确认后写入
-7. 写入后检查下游产物，扫描 `planning/specifications.md`（如存在）：
-    - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
-     提醒用户「任务已更新。代码尚未产生，请继续运行 `/specification-define`」
-    - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
-     a. 汇总所有状态为 `[测试已生成]` / `[已实现]` / `[已测试]` / `[待修复]` / `[已验证]` / `[已解引用]` / `[已删除]` 的规格的 `Affected Files` 字段，去重
-     b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
-      c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
-         git restore --source <baseline> <file1> <file2> ...
-         （baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
-         （若规格含 `[已解引用]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本；若含 `[已删除]` 状态，代码已物理删除且 `_deprecated/` 已清理，需用 `git log --diff-filter=D` 从 git 历史定位找回）
-         （若存在 git 未跟踪的新文件，提醒手动删除）
-      d. 醒示「代码已恢复。planning/ 文档保留，请重跑 `/specification-define`」
+7. 写入后检查下游产物：扫描 `planning/specifications.md`（如存在），按 AGENTS.md §通用回滚协议 处理（回滚范围 = 本轮全部规格）：
+    - 全部规格状态为 `[新增|修改: 已定义]`、`[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
+      提醒用户「任务已更新。代码尚未产生，请继续运行 `/specification-define`」
+    - 否则（代码已落地）→ 按协议汇总 `Affected Files`、执行重叠守卫、输出 `git restore --source <baseline>` 回滚指令（含 `_deprecated/` 与 git 历史特殊处理），重置范围内规格状态，并将 tasks.md 全部 task 标记重置为 `[TODO]`（协议要求；本命令重跑时复核修订任务），随后醒示「代码已恢复。planning/ 文档保留，请重跑 `/specification-define`」
 
 默认不直接覆盖文件，必须基于差异更新。
 
-### 共识要求
+### 共识要求（命令特有）
 
 - Agent 自主完成依赖排序和任务粒度分析
 - 写入文件前展示提案，等待用户确认
 - 用户提出调整时修订后重新确认
+- 通用确认规则遵循 AGENTS.md §交互协议
 
 ## 文档结构要求
+
+命令执行后将修改 `planning/tasks.md`，结构如下。
+
+**Frontmatter（YAML）：**
+
+```yaml
+round: <继承自 architecture.md>
+```
+
+版本历史由 git 承担，文档内不设 `version`/`created`/`updated`/`based_on` 字段。
+
+**正文章节：**
 
 ```md
 # Task List
 
 ## Task 1: <name> [TODO]
 
-- **Change Type**: feature | enhancement | refactor | bugfix | removal — 继承自架构，可进一步细化
+- **Change Type**: feature | enhancement | refactor | bugfix | removal | chore | docs — 继承自架构，可进一步细化
 - **Depends On**: <task # or none> — 前置依赖任务编号，none 表示无依赖
 - **Specs**: （由 specification-define 填写，子列表格式，每行一条规格名称）
            - `spec_name_1`
@@ -69,13 +76,14 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 说明：
 
 - 标题标记只能为：[TODO] / [DEFINED] / [IMPLEMENTED]
-- `change_type` 继承自架构，可进一步细化：feature | enhancement | refactor | bugfix | removal
+- `change_type` 继承自架构，可进一步细化：feature | enhancement | refactor | bugfix | removal | chore | docs
 - 不同 `change_type` 的 IMPLEMENTED 含义不同：
   - feature → 代码已新增
   - enhancement → 修改已完成
   - refactor → 重构已完成
   - bugfix → 修复已完成
   - removal → 已解引用并移入 `_deprecated/`（物理删除由 progress-report 收尾统一执行）
+  - chore / docs → 轻量实现完成（构建/类型检查通过，`[人工]` 条目落地并 PASS）
 - Specs 为子列表格式（`  - spec_name`），每行一条规格名称，由 specification-define 填写，code-review 据此遍历关联规格
 
 ## 输入来源
@@ -104,37 +112,7 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 
 ## 输出
 
-命令执行后将修改 `planning/tasks.md`。
-
-### 目标文件结构（planning/tasks.md）
-
-**Frontmatter（YAML）：**（每次确认写入时 `version` 递增、`updated` 更新为当前日期；`created` 仅首次创建时写入）
-
-```yaml
-round: <继承自 architecture.md>
-version: <int>
-created: <ISO date>
-updated: <ISO date>
-based_on: planning/architecture.md
-```
-
-**正文章节：**
-
-```md
-# Task List
-
-## Task 1: <name> [TODO]
-
-- **Change Type**: feature | enhancement | refactor | bugfix | removal — 继承自架构，可进一步细化
-- **Depends On**: <task # or none> — 前置依赖任务编号，none 表示无依赖
-- **Specs**: （由 specification-define 填写，子列表格式，每行一条规格名称）
-           - `spec_name_1`
-           - `spec_name_2`
-- **Description**: 任务目标、上下文与预期产出
-
-## Task 2: <name> [DEFINED]
-...
-```
+命令执行后将修改 `planning/tasks.md`，结构见「文档结构要求」。
 
 ### 交互预览
 

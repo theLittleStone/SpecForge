@@ -1,6 +1,6 @@
 ---
 name: specification-define
-description: 将任务拆解为可执行的实现规格，支持新增/修改/废弃等多种操作
+description: 将任务拆解为可执行的实现规格，支持新增/修改/废弃操作与轻量规格声明
 ---
 
 ## 功能说明
@@ -8,47 +8,49 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
 该命令用于维护实现规格文件 `planning/specifications.md`。
 规格是 TDD 流程的起点，为后续 test-generate 和 code-generate 提供精确的接口契约和测试用例。
 
-每条规格必须明确四个维度：
+每条常规规格必须明确四个维度：
 - **Spec**：做什么（目的、上下文、目标文件）
-- **Interface**：契约是什么（精确的函数签名/API端点/类型定义）
+- **Interface**：契约是什么（精确的函数签名/API端点/类型定义）；轻量规格可省略并在 Spec 中说明
 - **Test Double**（可选）：当 Interface 涉及开放边界时的测试替身设计
 - **Test Cases**：怎么验证（基于 Interface 的行为验证场景，区分 `[自动化]` 与 `[人工]`）
+
+规格状态采用 AGENTS.md §状态机与记法规范 定义的 16 态；本命令拥有 `[新增|修改: 已定义]` 与 `[废弃: 待删除]`，并按 AGENTS.md §通用回滚协议 执行状态重置。
 
 ## 行为规则
 
 执行流程：
 
-1. 读取 `planning/tasks.md`（如不存在则中断任务并向用户汇报）。若所有任务标题均未标记 `[TODO]`，提醒用户「当前无待拆解的任务，所有 task 已完成或已定义」并终止。
-2. 读取 `planning/specifications.md`（如存在）。若已存在且非空，检查其 frontmatter `round` 是否与 tasks.md 一致——不一致则醒示「specifications.md 属于另一轮次（round: X vs Y），请先运行 `/progress-report` 归档旧内容或清空 `planning/` 后重试」
-3. 扫描所有 `[TODO]` 任务，选取第一个满足 `Depends On` 全部为 `[IMPLEMENTED]` 的任务（`none` 或 `N/A` 视为已满足）。若存在 `[TODO]` 任务但无任何任务的依赖已满足，醒示用户「所有待拆解 task 均有未满足的前置依赖，请先完成前置 task 后再运行本命令」并终止。获取其 `change_type`。**每次执行仅处理一个任务，禁止跨 task 拆解。**
-4. 将该任务拆解为实现规格。按以下顺序逐 spec 定义：
+0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「状态机与记法规范」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。
+1. 读取 `planning/tasks.md`（如不存在则中断任务并向用户汇报）。
+2. 读取 `planning/specifications.md`（如存在）。若已存在且非空，检查其 frontmatter `round` 是否与 tasks.md 一致——不一致则醒示「specifications.md 属于另一轮次（round: X vs Y），请先运行 `/progress-report` 归档旧内容或清空 `planning/` 后重试」。
+3. **优先检查 `[规格缺陷]` 标记**：若存在任一规格 `Issues` 以 `[规格缺陷]` 开头，按「`[规格缺陷]` 规格的受理」流程处理。受理完成后终止本次执行，提醒用户「规格已重定义，请重新运行本命令继续任务拆解」。若无此标记，继续步骤 4。
+4. 扫描所有 `[TODO]` 任务，选取第一个满足 `Depends On` 全部为 `[IMPLEMENTED]` 的任务（`none` 或 `N/A` 视为已满足）。若所有任务均未标记 `[TODO]`，提醒用户「当前无待拆解的任务，所有 task 已完成或已定义」并终止。若存在 `[TODO]` 任务但无任何任务的依赖已满足，醒示用户「所有待拆解 task 均有未满足的前置依赖，请先完成前置 task 后再运行本命令」并终止。获取其 `change_type`。**每次执行仅处理一个任务，禁止跨 task 拆解。**
+5. 将该任务拆解为实现规格。按以下顺序逐 spec 定义：
    a. **撰写 Spec**：描述做什么——指明目标文件/函数/位置及期望行为，具体到可直接生成 diff
-   b. **确认 Interface**：提出精确的函数签名/API端点/参数结构/返回值类型。Interface 必须支持依赖注入，使 Test Double 可替换生产实现。向用户确认「接口设计是否合理」。用户确认后进入下一步。Interface 是 test-generate 和 code-generate 的共同契约，确保测试和代码对齐一致的 API 表面
-   c. **设计 Test Double**（仅当 Interface 涉及开放边界时）：参考 `architecture.md` 中 `### Test Double 策略` 的定义，提出测试替身方案（类型: Fake / Stub / Simulator）、数据结构、行为约定、暴露接口。向用户确认 Test Double 设计是否合理。用户确认后进入下一步
-   d. **撰写 Test Cases**：基于已确认的 Interface 和 Test Double（如有），列出行为验证场景，按类型标记：
-      - `[自动化] <场景>`：可通过代码断言验证的行为。每条描述 WHAT——验证什么行为，不描述 HOW——如何实现
-      - `[人工] <场景>`：需用户通过操作/视觉/交互确认的场景。每条必须含三要素：
-        - **操作**: 用户应执行的步骤
-        - **预期**: 期望的可见/可感结果
-        - **通过标准**: 判断 PASS/FAIL 的具体条件
-   e. 规格操作类型（新增/修改/废弃）继承自 task 的 `change_type`
-5. 检查是否存在重复或冲突定义
-6. 生成差异提案
-7. 输出预览。预览时 agent 必须意图说明：每个 spec 的核心目标、Interface 的设计理由、
-   Test Double 的设计理由（如有）、Test Cases 的覆盖策略（`[自动化]` vs `[人工]` 的划分理由）
+   b. **拟订完整提案**：一次性给出三个维度的提案——
+      - **Interface**：精确的函数签名/API端点/参数结构/返回值类型。Interface 必须支持依赖注入，使 Test Double 可替换生产实现。Interface 是 test-generate 和 code-generate 的共同契约
+      - **Test Double**（仅当 Interface 涉及开放边界时）：参考 `architecture.md` 中 `### Test Double 策略`，提出测试替身方案（类型: Fake / Stub / Simulator）、数据结构、行为约定、暴露接口
+      - **Test Cases**：基于 Interface 和 Test Double（如有）列出行为验证场景——`[自动化] <场景>` 描述 WHAT（验证什么行为，不描述 HOW）；`[人工] <场景>` 必须含操作 / 预期 / 通过标准三要素
+      轻量规格可省略 Interface（须在 Spec 中说明理由）；Test Cases 允许仅含 `[人工]` 条目或构建/类型检查清单。
+   c. **单次确认**：向用户展示该 spec 的整合提案，同时说明 Interface 设计理由、Test Double 设计理由（如有）、Test Cases 覆盖策略（`[自动化]` vs `[人工]` 的划分理由）。用户确认后该 spec 定稿；用户提出调整时修订提案后重新确认。
+   d. **轻量声明**：`change_type` 为 chore / docs 的规格默认声明轻量（`- **轻量**: 是 — <理由>`）；其他类型若提案声明轻量，必须写明理由并经用户显式确认。
+   e. 规格操作类型（新增/修改/废弃）继承自 task 的 `change_type`（映射见下表）。
+6. 检查是否存在重复或冲突定义
+7. 生成差异提案并输出预览（含全部 spec 的状态变更）
 8. 确认后写入 specifications.md，并将该 task 下所有规格名称以子列表格式（`  - spec_name`）写入 tasks.md 该 task 的 `Specs` 字段，建立双向链接，同时将该 task 标题标记更新为 `[DEFINED]`
-9. 写入后检查当前 task 下规格的状态：
-    - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]` → 代码未产生，安全。
-     提醒用户「规格已定义，请继续运行 `/test-generate` 生成测试（废弃规格跳过测试生成，可直接 `/code-generate`）」
-    - 存在 `[已实现]`、`[已测试]`、`[测试已生成]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
-     a. 从当前 task 关联的规格中提取 `Affected Files` 字段，去重（规格仅作用于所属 task；其余 task 的代码与其规格一致、不受影响，故不纳入回滚）
-     b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
-      c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
-         git restore --source <baseline> <file1> <file2> ...
-         （baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
-         （若规格含 `[已解引用]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本；若含 `[已删除]` 状态，代码已物理删除且 `_deprecated/` 已清理，需用 `git log --diff-filter=D` 从 git 历史定位找回）
-         （若存在 git 未跟踪的新文件，提醒手动删除）
-      d. 醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/test-generate` → `/code-generate`」
+9. 写入后检查当前 task 下的规格状态，按 AGENTS.md §通用回滚协议 处理（回滚范围 = 当前 task 全部规格，整 task 语义）：
+    - 全部规格状态为 `[新增|修改: 已定义]` 或 `[废弃: 待删除]` → 代码未产生，安全。
+      提醒用户「规格已定义，请继续运行 `/test-generate` 生成测试（轻量与废弃规格跳过测试生成，可直接 `/code-generate`）」
+    - 否则（代码已落地）→ 按协议汇总 `Affected Files`、执行重叠守卫、输出 `git restore --source <baseline>` 回滚指令并重置范围内规格状态，随后醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/test-generate` → `/code-generate`」
+
+### `[规格缺陷]` 规格的受理
+
+当规格 `Issues` 以 `[规格缺陷]` 开头（由 test-verify 或 code-review 按 AGENTS.md §失败路由协议 分类）时：
+
+1. **整 task 回滚**：按 AGENTS.md §通用回滚协议 执行，回滚范围 = 该规格所属 task 的全部规格。当前 task 已落地的代码恢复至 baseline，范围内规格状态全部重置（`[新增|修改: 已定义]`、`[废弃: 待删除]`）。规格定义文本保留。
+2. **重定义目标规格**：对 `[规格缺陷]` 规格按步骤 5 重新拟定提案并确认。新定义写入后清空其 `Issues`，重置 `Retry Count` 为 0，状态保持 `[新增|修改: 已定义]` 或 `[废弃: 待删除]`。
+3. **连带检查**：检查同 task 其余规格的定义在代码回滚后是否仍然成立；若其依赖被修订的 Interface 或行为，一并修订定义（定义修订无代码成本，不触发额外回滚）。
+4. **task 标题**：保持 `[DEFINED]` 不变。提醒用户重跑 `/test-generate` 重启该 task 的 TDD 循环。
 
 ### 废弃规格（removal）的定义语义
 
@@ -62,14 +64,26 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
   2. 全量构建 / 类型检查
   3. `grep` 引用扫描（确认无残留引用）
 
-### 共识要求
+### 共识要求（命令特有）
 
-- Agent 自主完成规格拆解和技术方案拟订
-- 写入文件前展示提案，等待用户确认
+- Agent 自主完成规格拆解和技术方案拟订，写入文件前展示提案，等待用户确认
 - ≥5 条规格/task 时醒示用户确认是否需要拆分 task
 - 用户提出调整时修订后重新确认
+- 通用确认规则遵循 AGENTS.md §交互协议
 
 ## 文档结构要求
+
+命令执行后将修改 `planning/specifications.md`，结构如下。
+
+**Frontmatter（YAML）：**
+
+```yaml
+round: <继承自 tasks.md>
+```
+
+版本历史由 git 承担，文档内不设 `version`/`created`/`updated`/`based_on` 字段。
+
+**正文章节：**
 
 ```md
 # Implementation Specs
@@ -77,26 +91,27 @@ description: 将任务拆解为可执行的实现规格，支持新增/修改/�
 ## [新增: 已定义] name
 
 - **Task**: Task N — 所属任务编号，建立到 task 的反向指针
-- **Change Type**: feature | enhancement | bugfix | refactor | removal
+- **Change Type**: feature | enhancement | bugfix | refactor | removal | chore | docs
+- **轻量**: 是 — <理由>（仅轻量规格书写；chore / docs 自动轻量，其余类型须用户确认）
 - **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填：以 grep 扫描代码库实际引用方为准，architecture.md 的 # Dependency Index 与历史归档作起点参考>
 - **Spec**: <自由描述> — 指明文件/函数/位置及期望行为，具体到可直接生成 diff
-- **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约
+- **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约（轻量规格可省略，须在 Spec 中说明）
   - 生产实现: <生产代码实现类/模块名>
 - **Test Double**: `FakeXxxService`（可选，仅当 Interface 涉及开放边界）
   - **类型**: Fake | Stub | Simulator
   - **数据结构**: <内部状态存储描述>
   - **行为约定**: <模拟外部行为的具体规则>
   - **暴露接口**: <测试代码可用的额外断言方法>
-- **Test Cases**: — 行为验证场景列表，基于 Interface 编写，按类型标记
+- **Test Cases**: — 行为验证场景列表，基于 Interface 编写，按类型标记；`[人工]` 条目的执行结果由 code-generate 回写 `✓ PASS` / `✗ FAIL — <备注>`
   - `[自动化]` 正常路径: <描述>
   - `[自动化]` 边界条件: <描述>
   - `[人工]` 视觉验证:
     - **操作**: <用户应执行的步骤>
     - **预期**: <期望的可见/可感结果>
     - **通过标准**: <判断 PASS/FAIL 的具体条件>
-- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；废弃规格为目标代码原始路径 + 引用方文件 + 移动后 `_deprecated/` 内路径；追加去重
-- **Issues**: — test-verify 写入当前失败原因；code-generate 修复后清空；code-review 严重问题时写入
-- **Retry Count**: 0 — test-verify 递增
+- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；废弃规格为目标代码原始路径 + 引用方文件 + 移动后 `_deprecated/` 内路径；追加去重，每行一个
+- **Issues**: — 失败时由裁决方（test-verify / code-review）写入，格式 `[实现缺陷|测试缺陷|规格缺陷] <详情>`（见 AGENTS.md §失败路由协议）；路由修复完成后清空
+- **Retry Count**: 0 — test-verify 每次标记 `[新增|修改|废弃: 待修复]` 时递增；修复完成后重置为 0
 ```
 
 ## change_type → 操作类型映射
@@ -110,31 +125,9 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 | refactor         | 修改       |
 | bugfix           | 修改       |
 | removal          | 废弃       |
+| chore / docs     | 按实际为新增或修改，规格默认声明轻量 |
 
-规格标题格式 `[操作类型: 状态]`，操作类型由此映射确定，状态由流水线下游命令更新。
-
-## 状态说明
-
-规格状态采用 `[操作类型: 实现状态]` 格式，共 16 种组合：
-
-| 标记 | 含义 |
-|------|------|
-| `[新增: 已定义]` | 规格已定义（含 Interface + Test Cases），待生成测试 |
-| `[新增: 测试已生成]` | 测试代码已生成并确认 RED，待实现 |
-| `[新增: 已实现]` | 代码已实现，待验证 |
-| `[新增: 已测试]` | 代码已通过测试，待审查 |
-| `[新增: 待修复]` | 测试未通过，需回退修复 |
-| `[新增: 已验证]` | 已通过审查（终态） |
-| `[修改: 已定义]` | 修改规格已定义（含 Interface + Test Cases），待生成测试 |
-| `[修改: 测试已生成]` | 测试代码已生成并确认 RED，待实施修改 |
-| `[修改: 已实现]` | 修改已实施，待验证 |
-| `[修改: 已测试]` | 修改已通过测试，待审查 |
-| `[修改: 待修复]` | 修改测试未通过，需回退修复 |
-| `[修改: 已验证]` | 修改已通过审查（终态） |
-| `[废弃: 待删除]` | 规格已定义（含待删目标与 `Depended By`），待解引用 |
-| `[废弃: 已解引用]` | 引用方已全部移除，代码已移入 `_deprecated/`，定向测试 + 全量构建通过 |
-| `[废弃: 待修复]` | 解引用验证未通过，需修复受影响模块后重试 |
-| `[废弃: 已删除]` | `_deprecated/` 中代码已物理删除（progress-report 收尾），终态 |
+规格标题格式 `[操作类型: 状态]`，操作类型由此映射确定，状态由流水线下游命令按 AGENTS.md §状态机与记法规范 推进。
 
 ## 输入来源
 
@@ -144,16 +137,17 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 
 | 文件 | 用途 | 关键内容 |
 |------|------|---------|
-| `planning/tasks.md` | 任务列表 | 按 `## Task N` 标题顺序扫描，选取第一个标题标记 `[TODO]` 的任务，从详情字段提取 `Change Type`、`Depends On`、`Description`。不跨 task 处理。 |
+| `planning/tasks.md` | 任务列表 | 按 `## Task N` 标题顺序扫描，选取第一个标题标记 `[TODO]` 且依赖满足的任务，从详情字段提取 `Change Type`、`Depends On`、`Description`。不跨 task 处理。 |
 | `planning/architecture.md` | 依赖索引 | `# Dependency Index` 章节，作为推导规格 `Depended By` 的起点参考；废弃规格最终以 `grep` 代码扫描实际引用方为准 |
+| `planning/specifications.md` | 既有规格 | 检查 `Issues` 是否含 `[规格缺陷]` 标记（优先受理）；重复/冲突检查 |
 
 ### 状态过滤
 
-忽略标题标记为 `[DEFINED]` 或 `[IMPLEMENTED]` 的任务。从 `[TODO]` 任务中选取第一个 `Depends On` 全部满足（前置 task 均为 `[IMPLEMENTED]`；`none` / `N/A` 视为已满足）的进行处理。每次执行仅处理一个 task。
+忽略标题标记为 `[DEFINED]` 或 `[IMPLEMENTED]` 的任务。从 `[TODO]` 任务中选取第一个 `Depends On` 全部满足（前置 task 均为 `[IMPLEMENTED]`；`none` / `N/A` 视为已满足）的进行处理。每次执行仅处理一个 task。`[规格缺陷]` 受理不受此过滤限制。
 
 ### 处理顺序
 
-每次执行选取第一个满足依赖的 `[TODO]` 任务（`Depends On` 全部 `[IMPLEMENTED]` 或为 `none`/`N/A`）。再次执行时自动定位下一个满足依赖的 `[TODO]` 任务。无满足依赖的任务时醒示用户先完成前置 task。
+每次执行先受理 `[规格缺陷]` 规格（如有）；否则选取第一个满足依赖的 `[TODO]` 任务。再次执行时自动定位下一个满足依赖的 `[TODO]` 任务。无满足依赖的任务时醒示用户先完成前置 task。
 
 ### 上游文档解析提示
 
@@ -162,65 +156,23 @@ specification-define 是唯一负责将 task 的 `change_type` 映射为规格�
 
 ## 输出
 
-命令执行后将修改 `planning/specifications.md`。
-
-### 目标文件结构（planning/specifications.md）
-
-**Frontmatter（YAML）：**（每次确认写入时 `version` 递增、`updated` 更新为当前日期；`created` 仅首次创建时写入）
-
-```yaml
-round: <继承自 tasks.md>
-version: <int>
-created: <ISO date>
-updated: <ISO date>
-based_on: planning/tasks.md
-```
-
-**正文章节：**
-
-```md
-# Implementation Specs
-
-## [新增: 已定义] name
-
-- **Task**: [[tasks.md#task-n]] — 所属任务编号，建立到 task 的反向指针
-- **Change Type**: feature | enhancement | bugfix | refactor | removal
-- **Depended By**: <引用本规格目标文件的模块列表；废弃规格必填：以 grep 扫描代码库实际引用方为准，architecture.md 的 # Dependency Index 与历史归档作起点参考>
-- **Spec**: <自由描述> — 指明文件/函数/位置及期望行为，具体到可直接生成 diff
-- **Interface**: <精确的函数签名/API端点/类型定义> — test-generate 和 code-generate 的共同契约
-  - 生产实现: <生产代码实现类/模块名>
-- **Test Double**: `FakeXxxService`（可选，仅当 Interface 涉及开放边界）
-  - **类型**: Fake | Stub | Simulator
-  - **数据结构**: <内部状态存储描述>
-  - **行为约定**: <模拟外部行为的具体规则>
-  - **暴露接口**: <测试代码可用的额外断言方法>
-- **Test Cases**: — 行为验证场景列表，基于 Interface 编写，按类型标记
-  - `[自动化]` 正常路径: <描述>
-  - `[自动化]` 边界条件: <描述>
-  - `[人工]` 视觉验证:
-    - **操作**: <用户应执行的步骤>
-    - **预期**: <期望的可见/可感结果>
-    - **通过标准**: <判断 PASS/FAIL 的具体条件>
-- **Affected Files**: — test-generate 写入测试文件路径；code-generate / code-review 写入源文件路径；废弃规格为引用方文件 + 目标代码原始路径 + 移动后 `_deprecated/` 内文件路径；追加去重，每行一个
-- **Issues**: — test-verify 写入当前失败原因；code-generate 修复后清空；code-review 严重问题时写入
-- **Retry Count**: 0 — test-verify 每次标记 `[新增: 待修复]`、`[修改: 待修复]` 或 `[废弃: 待修复]` 时递增；code-generate 修复后重置为 0
-```
+命令执行后：写入/修订 `planning/specifications.md`，更新 tasks.md 的 `Specs` 双向链接与任务标记；必要时按 AGENTS.md §通用回滚协议 输出回滚指令并重置状态。
 
 ### 交互预览
 
-执行时以 diff 格式展示修改提案，包含规格分析、Interface 设计理由、Test Double 设计理由（如有）、Test Cases 覆盖策略（`[自动化]` vs `[人工]` 的划分理由）与状态变更。
+执行时以 diff 格式展示修改提案，包含规格分析、Interface 设计理由、Test Double 设计理由（如有）、Test Cases 覆盖策略（`[自动化]` vs `[人工]` 的划分理由）、轻量声明理由（如有）与状态变更。
 
 ## 下一步
 
-规格已定义后，提醒用户运行 `/test-generate` 生成测试代码（TDD: 测试先行）。
+规格已定义后，提醒用户运行 `/test-generate` 生成测试代码（TDD: 测试先行）；轻量与废弃规格跳过测试生成，直接 `/code-generate`。
 
 ## 约束
 
-- 只允许对 TODO 状态任务进行规格拆解
+- 只允许对 TODO 状态任务进行规格拆解（`[规格缺陷]` 受理除外）
 - 选取 TODO 任务时必须检查 `Depends On` 字段：前置依赖（除 `none` / `N/A` 外）必须全部 `[IMPLEMENTED]` 才可拆解。若所有 TODO 任务的依赖均未满足，醒示用户先完成前置 task 并终止
 - 规格的 `Change Type` 必须与关联 task 的 `change_type` 一致
 - 不允许重复定义相同规格
-- 每个规格必须：
+- 每个常规规格（非轻量）必须：
    - 单一目的——可用一句话概括修改内容（不跨 concern）
    - 一屏可审——Agent 可在一次回复轮次中理解并生成差异
    - 包含 `Interface` 字段——精确的函数签名/API契约/类型定义
@@ -228,10 +180,11 @@ based_on: planning/tasks.md
    - 包含 `Test Cases` 字段——至少覆盖正常路径、边界条件、异常输入
    - Test Cases 中每个条目必须标记 `[自动化]` 或 `[人工]`
    - `[人工]` 条目必须包含操作 / 预期 / 通过标准三要素
+- 轻量规格的放宽项：可省略 Interface（须在 Spec 中说明）；Test Cases 允许仅含 `[人工]` 条目或构建/类型检查清单。轻量声明不得由 agent 自行降级产生——chore / docs 自动轻量，其余类型须写明理由并经用户确认
 - 若 Interface 涉及开放边界，必须设计 Test Double
 - `[人工]` 仅用于以下场景：
-  1. 被测行为无法通过代码断言验证（视觉正确性、交互手感）
-  2. 真实系统集成的残余验证——Test Double 已覆盖核心逻辑，`[人工]` 仅验证残余差异
+   1. 被测行为无法通过代码断言验证（视觉正确性、交互手感）
+   2. 真实系统集成的残余验证——Test Double 已覆盖核心逻辑，`[人工]` 仅验证残余差异
 - `[自动化]` 与 `[人工]` 是叠加关系（双保险），非互斥
 - 非必要不添加 `[人工]` 条目——优先通过 Interface 设计（依赖注入 + Test Double）使行为可自动化验证
 - 一个 Task 的规格数 ≥ 5 时，醒示用户确认是否需要合并或进一步拆分 task

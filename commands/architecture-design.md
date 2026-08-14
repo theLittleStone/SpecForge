@@ -14,6 +14,7 @@ description: 维护架构设计文件，支持新建、修改、重构、删除�
 
 执行流程：
 
+0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「状态机与记法规范」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。
 1. 读取 `planning/requirement.md`（必须存在，如不存在则向用户汇报，禁止自行添加），获取其 `round`、`change_type`、`status`。若 `status` 为 `draft`，提醒用户「requirement.md 尚未确认（status: draft），建议先运行 requirement-define 完成确认」。
 2. 读取 `planning/architecture.md`（如不存在则新建）。若已存在，检查其 frontmatter `round` 是否与 requirement.md 一致——不一致则醒示「architecture.md 属于另一轮次（round: X vs Y），请先运行 `/progress-report` 归档旧内容或清空 `planning/` 后重试」
 3. 分析需求与当前架构
@@ -23,27 +24,34 @@ description: 维护架构设计文件，支持新建、修改、重构、删除�
 6. 生成差异修改提案
 7. 输出预览
 8. 确认后写入，并将 frontmatter 中 `status` 更新为 `confirmed`
-9. 写入后检查下游产物，扫描 `planning/specifications.md`（如存在）：
-    - 全部规格状态为 `[新增: 已定义]`、`[修改: 已定义]` 或 `[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
-     提醒用户「架构已更新。代码尚未产生，请按顺序重跑：`/task-breakdown` → `/specification-define`」
-    - 存在 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 状态 → 代码已落地，需回滚：
-      a. 汇总所有状态为 `[测试已生成]`、`[已实现]`、`[已测试]`、`[待修复]`、`[已验证]`、`[已解引用]` 或 `[已删除]` 的规格的 `Affected Files` 字段，去重
-     b. 若 `Affected Files` 为空，用 `git diff --name-only HEAD` 获取实际变动
-     c. 过滤掉 `planning/` 目录下的文件与 `_deprecated/` 内路径（后者由删除目录步骤处理），输出回滚指令：
-         git restore --source <baseline> <file1> <file2> ...
-         （baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
-         （若规格含 `[已解引用]` 状态，另需删除项目根目录 `_deprecated/` 及其中的移动副本；若含 `[已删除]` 状态，代码已物理删除且 `_deprecated/` 已清理，需用 `git log --diff-filter=D` 从 git 历史定位找回）
-         （若存在 git 未跟踪的新文件，提醒手动删除）
-      d. 醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/task-breakdown` → `/specification-define`」
+9. 写入后检查下游产物：扫描 `planning/specifications.md`（如存在），按 AGENTS.md §通用回滚协议 处理（回滚范围 = 本轮全部规格）：
+    - 全部规格状态为 `[新增|修改: 已定义]`、`[废弃: 待删除]`（或文件不存在）→ 代码未产生，安全。
+      提醒用户「架构已更新。代码尚未产生，请按顺序重跑：`/task-breakdown` → `/specification-define`」
+    - 否则（代码已落地）→ 按协议汇总 `Affected Files`、执行重叠守卫、输出 `git restore --source <baseline>` 回滚指令（含 `_deprecated/` 与 git 历史特殊处理），重置范围内规格状态，并将 tasks.md 全部 task 标记重置为 `[TODO]`（协议要求），随后醒示「代码已恢复。planning/ 文档保留，请重跑下游：`/task-breakdown` → `/specification-define`」
 
-### 共识要求
+### 共识要求（命令特有）
 
 - Agent 自主完成 Changes 切割和 Design Decisions 拟订
 - 写入文件前展示提案，等待用户确认
 - 涉及关键技术选型时主动说明利弊，由用户拍板
 - 用户提出修改时回到分析步骤修订
+- 通用确认规则遵循 AGENTS.md §交互协议
 
 ## 文档结构要求
+
+命令执行后将修改 `planning/architecture.md`，结构如下。
+
+**Frontmatter（YAML）：**
+
+```yaml
+round: <继承自 requirement.md>
+status: draft | confirmed
+change_type: <继承自 requirement.md>
+```
+
+版本历史由 git 承担，文档内不设 `version`/`created`/`updated`/`based_on` 字段。
+
+**正文章节：**
 
 ```md
 # Overview          — 本轮变更目标，一句话概括
@@ -110,35 +118,7 @@ Agent 根据当前项目的技术栈和本轮变更，在此填写具体的 Test
 
 ## 输出
 
-命令执行后将修改 `planning/architecture.md`。
-
-### 目标文件结构（planning/architecture.md）
-
-**Frontmatter（YAML）：**（每次确认写入时 `version` 递增、`updated` 更新为当前日期；`created` 仅首次创建时写入）
-
-```yaml
-round: <继承自 requirement.md>
-version: <int>
-created: <ISO date>
-updated: <ISO date>
-based_on: planning/requirement.md
-status: draft | confirmed
-change_type: <继承自 requirement.md>
-```
-
-**正文章节：**
-
-```md
-# Overview          — 本轮变更目标，一句话概括
-# Changes            — 本轮变更切分，每条对应一个独立 concern（新建 / 修改 / 删除）
-                       
-                       | Change | Description | Dependencies |
-                       |--------|-------------|--------------|
-                       | 名（操作） | 此变更要做什么 | N/A / 其他 Change |
-# Impact Analysis    — 变更对现有模块、数据流、API 的影响分析，副作用评估
-# Dependency Index   — 模块级双向引用索引（Module / Depends On / Depended By 表格），随变更保持最新
-# Design Decisions   — 关键设计决策、技术选型、取舍理由
-```
+命令执行后将修改 `planning/architecture.md`，结构见「文档结构要求」。
 
 ### 交互预览
 

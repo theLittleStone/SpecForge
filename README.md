@@ -25,11 +25,11 @@ SpecForge guarantees quality through **separation, not trust**, built on three s
 2. **Progressive refinement** — The planning layers are not copies of each other; each is a **more concrete rewriting** of the previous one: `Goal & Scope → Changes & Design → Executable Tasks → Precise Interface Contracts & Test Cases`. Requirements get progressively pinned down at every layer.
 
 3. **Adversarial TDD trust model** — In the programming phase, test / code / review are designed to be executed by **different agents that mutually distrust each other**:
-   - **Test agent** (`/test-generate`): trusts only the spec. Writes tests and Test Doubles, and forces RED (tests must fail before implementation).
-   - **Code agent** (`/code-generate`): trusts only the tests. Reads them to understand expected behavior, then implements.
+   - **Test agent** (`/test-generate`): trusts only the spec. Writes tests and Test Doubles, and forces RED (tests must fail before implementation). It is the **sole owner of test code** — `[test-defect]` repairs are routed back to it as well.
+   - **Code agent** (`/code-generate`): trusts only the tests. Reads them to understand expected behavior, then implements; **never modifies test code** — suspected test errors are only classified and routed.
    - **Review agent** (`/code-review`): audits both code and test quality, refactors, and propagates completion upward.
-   - **Neutral verifier** (`/test-verify`): generates no code; judges only test results and updates spec states. Neither side can grade itself.
-   - **The user** is the final judge, verifying `[manual]` items that automation cannot reach.
+   - **Neutral verifier** (`/test-verify`): generates no code; judges only test results and updates spec states. Neither side can grade itself. On FAIL it classifies Issues into three types per the failure routing protocol.
+   - **The user** is the final judge, verifying `[manual]` items that automation cannot reach; results are written back to specs.md by code-generate.
 
 ---
 
@@ -66,7 +66,9 @@ flowchart TD
 
 3. **Closeout** — `progress-report` enforces hard acceptance gates (full regression, Goal traceability, closed Open Questions), then archives the round.
 
-**test-verify** (dotted lines) is a shared **neutral test runner** reused across all three TDD phases, interpreting PASS/FAIL according to the calling context. It generates no code and advances spec states solely from test results — neither the test agent nor the code agent can grade itself. It also powers `code-review`'s impact-scope regression and `progress-report`'s full regression.
+**test-verify** (dotted lines) is a shared **neutral test runner** reused across all three TDD phases, interpreting PASS/FAIL according to the calling context. It generates no code and advances spec states solely from test results — neither the test agent nor the code agent can grade itself. On FAIL it classifies Issues into three types per the failure routing protocol. It also powers `code-review`'s impact-scope regression (including the pre-refactor baseline run) and `progress-report`'s full regression.
+
+Non-behavioral changes (chore / docs) take the **lightweight spec** path: RED is skipped, and after implementation the spec goes through `/test-verify`'s lightweight acceptance and `/code-review` audit, sharing the same terminal states. Rework is driven by the **failure routing protocol** — the three-class Issues (`[实现缺陷]` / `[测试缺陷]` / `[规格缺陷]`) route back to the implementation / test / spec stage respectively, giving both test errors and spec errors a defined exit.
 
 ---
 
@@ -103,18 +105,45 @@ Each spec flows through a strict state machine using the `[Operation: State]` fo
 | `[新增: 测试已生成]` | test-generate | Tests generated and confirmed RED |
 | `[新增: 已实现]` | code-generate | Code implemented, awaiting verification |
 | `[新增: 已测试]` | test-verify | Tests passed, awaiting review |
-| `[新增: 待修复]` | test-verify | Tests failed, needs repair |
+| `[新增: 待修复]` | test-verify / code-review | Verification failed, rework via failure routing protocol |
 | `[新增: 已验证]` | code-review | Reviewed and verified (terminal) |
 | `[修改: 已定义]` | specification-define | Modification spec defined |
 | `[修改: 测试已生成]` | test-generate | Modification tests generated and confirmed RED |
 | `[修改: 已实现]` | code-generate | Modification implemented |
 | `[修改: 已测试]` | test-verify | Modification tests passed |
-| `[修改: 待修复]` | test-verify | Modification tests failed |
+| `[修改: 待修复]` | test-verify / code-review | Modification verification failed, rework via failure routing protocol |
 | `[修改: 已验证]` | code-review | Modification reviewed and verified (terminal) |
 | `[废弃: 待删除]` | specification-define | Spec defined (with removal target and `Depended By`), awaiting de-reference |
 | `[废弃: 已解引用]` | code-generate | Referrers all removed, code moved to `_deprecated/`, targeted tests + full build pass |
-| `[废弃: 待修复]` | test-verify | De-reference verification failed, repair affected modules and retry |
+| `[废弃: 待修复]` | test-verify / code-review | De-reference verification failed, rework via failure routing protocol |
 | `[废弃: 已删除]` | progress-report | Code physically deleted from `_deprecated/` (progress-report closeout), terminal |
+
+Lightweight specs share this state machine with regular specs, skipping only the test-generate phase (see "Lightweight Specs"). The canonical 16-state table and each command's state-filter rules live in the `AGENTS.md` written by `/setup` (§ State Machine & Notation); command files use the pipe shorthand `[新增|修改: x]` for parallel enumeration, but the full `[OperationType: State]` form is mandatory when writing into planning/ documents.
+
+### Failure Routing Protocol (Issues Three-Class)
+
+Failures no longer have a single exit. When test-verify / code-review judge FAIL, they must write the failure into the spec's `Issues` field as `[type] <detail>` with one of three classifications, deciding the rework route:
+
+| Issues Type | Meaning | Routed To |
+|-------------|---------|-----------|
+| `[实现缺陷]` | Implementation violates the contract (assertion fails and the assertion matches the spec) | `/code-generate` fixes the implementation |
+| `[测试缺陷]` | The test code itself is wrong (references fields not in the spec, assertion contradicts spec text, etc.) | `/test-generate` fixes the test |
+| `[规格缺陷]` | The spec is incomplete/self-contradictory and needs redefinition | `/specification-define` (whole-task rollback, then redefine) |
+
+Accompanying discipline: the code agent and review agent **never modify test code** (`/test-generate` is the sole owner); when `Retry Count ≥ 3`, blind retries are forbidden — one of the three routes must be chosen.
+
+### Lightweight Specs
+
+Not every change suits test-first. Specs with `change_type` of `chore` / `docs` are declared lightweight automatically; other types may be declared lightweight after user confirmation (spec carries `- **轻量**: 是 — <reason>`; the agent must not self-downgrade). Lightweight specs:
+
+- May omit Interface (must be explained in Spec); Test Cases may contain only `[manual]` items or a build/typecheck checklist
+- Skip test-generate; `/code-generate` implements directly
+- GREEN acceptance = full build + typecheck + all `[manual]` items landed as `✓ PASS` (run by the `/test-verify` lightweight checklist)
+- Then go through `/code-review` to the `[已验证]` terminal state, same as regular specs
+
+### Manual Verification Persistence
+
+`[manual]` tests are not verbal: after code-generate walks the user through each item, it must write the result back to the Test Cases entry in specs.md (`✓ PASS` / `✗ FAIL — <note>`). State must not advance until results are landed; code-review uses these landed marks as the sole cross-session evidence of manual acceptance.
 
 ### Deprecated Code Lifecycle
 
@@ -129,9 +158,15 @@ Removal is a behavior reduction, not test-first work. Deprecated specs flow thro
 
 `architecture-design` maintains a module-level bidirectional reference index (`# Dependency Index`: Module / Depends On / Depended By) in `architecture.md`, kept in sync with every change. Modules slated for removal must list all their referrers under `Depended By` — this drives the de-reference work in `code-generate` and the physical-deletion decision in `progress-report`. For deprecated specs, the authoritative `Depended By` comes from an actual `grep` scan of the codebase, not the index alone.
 
-### Code-Aware Rollback
+### Code-Aware Rollback (Unified Rollback Protocol + Overlap Guard)
 
-When any upstream command (requirement-define / architecture-design / task-breakdown / specification-define) modifies a document, it automatically scans for downstream code that has already been written. If found, it generates precise `git restore --source <baseline>` instructions (baseline = the git HEAD recorded in requirement.md frontmatter at round start) — protecting the codebase from accidental inconsistency between planning documents and implementation. De-referenced code (`[废弃: 已解引用]`) additionally requires deleting `_deprecated/` and its moved copies; physically deleted code (`[废弃: 已删除]`) must be recovered from git history (`git log --diff-filter=D`).
+When any upstream command (requirement-define / architecture-design / task-breakdown / specification-define) modifies a document, it automatically scans for downstream code that has already been written. If found, it applies the unified **rollback protocol** (single-sourced in AGENTS.md):
+
+- **Scope**: requirement / architecture / task-level edits = all specs of the round; specification-level redefinition (including `[规格缺陷]` routing) = all specs of the current task (whole-task rollback)
+- **Instructions**: aggregates `Affected Files` of specs in scope and emits precise `git restore --source <baseline>` instructions (baseline = the git HEAD recorded in requirement.md frontmatter at round start)
+- **Overlap guard**: intersects the rollback set with `Affected Files` of all `[新增|修改: 已验证]` / `[废弃: 已解引用]` specs **outside** the scope; overlapping files are **never auto-restored** (they carry verified work) — they are listed for precise manual reversion and re-verified later by code-review's impact-scope regression, protecting already-accepted features from collateral damage
+- **State reset**: specs in scope reset to initial states (`[已定义]` / `[废弃: 待删除]`); task markers reset by level — requirement / architecture / task-level rollback resets all tasks to `[TODO]` (descriptions preserved, re-verified on re-run, existing specs revised in place rather than re-created), specification-level rollback (whole task) keeps `[DEFINED]`. planning/ documents are preserved
+- **Special cases**: de-referenced code (`[废弃: 已解引用]`) additionally requires deleting `_deprecated/` and its moved copies; physically deleted code (`[废弃: 已删除]`) must be recovered from git history (`git log --diff-filter=D`)
 
 ### Socratic Requirements Gathering
 
@@ -165,14 +200,14 @@ After installation, run `/requirement-define` in opencode to start the pipeline.
 
 | Command | Stage | Description |
 |---------|-------|-------------|
-| `/requirement-define` | Planning | Socratic dialogue to define goals, scope, constraints, and open questions. Produces `planning/requirement.md` |
+| `/requirement-define` | Planning | Socratic dialogue to define goals, scope, constraints, and open questions. Supports feature/enhancement/refactor/bugfix/removal/chore/docs. Produces `planning/requirement.md` |
 | `/architecture-design` | Planning | Design architecture changes, impact analysis, and Test Double strategy. Produces `planning/architecture.md` |
 | `/task-breakdown` | Planning | Break architecture into a DAG of executable tasks with dependencies. Produces `planning/tasks.md` |
-| `/specification-define` | Planning | Define Interface, Test Double, and Test Cases for each task. Produces `planning/specifications.md` |
-| `/test-generate` | **RED** (test agent) | Generate test code from specs, run to confirm FAIL. Generate Test Double code. Assembles `[manual]` items into a checklist |
-| `/code-generate` | **GREEN** (code agent) | Read test code to understand expected behavior, implement to pass tests. Guides `[manual]` verification step by step |
-| `/code-review` | **REFACTOR** (review agent) | Code review + refactoring + regression testing. Runs impact-scope regression (covers `[已验证]` specs sharing affected files) after each refactor; rolls back on failure. Reviews test code quality. Propagates completion upward on success |
-| `/test-verify` | Verify (neutral) | Neutral test runner reused by test-generate / code-generate / code-review / progress-report. Interprets PASS/FAIL by calling context; classifies failures as assertion vs error (stub fallback for RED); executes impact-scope regression (code-review) and full regression (progress-report); runs the deprecated verification checklist (targeted tests + full build + grep scan) |
+| `/specification-define` | Planning | Define Interface, Test Double, and Test Cases for each task (one integrated proposal + one confirmation per spec); declares lightweight specs; handles `[规格缺陷]` routing (whole-task rollback + redefine). Produces `planning/specifications.md` |
+| `/test-generate` | **RED** (test agent) | Generate test code from specs, run to confirm FAIL. Generate Test Double code. Assembles `[manual]` items into a checklist. The **sole owner of test code** — repairs `[测试缺陷]`-routed tests. Skips deprecated and lightweight specs |
+| `/code-generate` | **GREEN** (code agent) | Read test code to understand expected behavior, implement to pass tests; lightweight specs implemented directly. Guides `[manual]` verification and writes results back to specs.md. Never modifies test code; failures routed by the three-class Issues protocol |
+| `/code-review` | **REFACTOR** (review agent) | Code review + refactoring + regression testing. Runs a **baseline regression before any refactor** (even with zero refactor items); runs impact-scope regression after each refactor, rolls back on failure. Reviews test code quality (classify-and-route only, never edits tests). Verifies `[manual]` completion via landed marks in specs.md. Propagates completion upward on success |
+| `/test-verify` | Verify (neutral) | Neutral test runner reused by test-generate / code-generate / code-review / progress-report. Interprets PASS/FAIL by calling context; classifies failures as assertion vs error; on FAIL writes three-class Issues with routing advice; executes impact-scope regression (code-review) and full regression (progress-report); runs the deprecated verification checklist (targeted tests + full build + grep scan); runs the lightweight acceptance checklist (build + typecheck + manual-landing check) |
 | `/progress-report` | Close | Gate on full regression + Goal traceability + closed Open Questions, then physically delete `_deprecated/` (setting `[废弃: 已删除]`), archive to `planning/archive/`, append to `changelist.md` |
 
 ---
@@ -183,7 +218,7 @@ After installation, run `/requirement-define` in opencode to start the pipeline.
 |---------|-------------|
 | `/deep-debug` | System-level bug investigation using hypothesis-driven analysis of code, tests, and documentation |
 | `/explain-to-me` | Explain code, architecture, or technical concepts by synthesizing local code with web information |
-| `/setup` | Initialize `AGENTS.md` with pipeline-wide behavior constraints |
+| `/setup` | Initialize project `AGENTS.md` with pipeline-wide behavior constraints and the 8-section workflow consensus (interaction protocol / safety baseline / execution constraints / state machine & notation / failure routing protocol / unified rollback protocol / manual-landing rule / lightweight spec rule). OpenCode auto-injects it into every session; commands reference it instead of duplicating |
 
 ---
 
@@ -197,7 +232,7 @@ Fills knowledge gaps about programming languages, frameworks, and libraries with
 
 ### style-resolver
 
-Auto-detects the project's language and framework, then generates `style_guide.md` based on existing code conventions or community standards. Called automatically by code-generate and code-review to ensure consistent code style.
+Auto-detects the project's language and framework, then generates `style_guide.md` based on existing code conventions or community standards. Called automatically by test-generate / code-generate / code-review to ensure consistent code style.
 
 ---
 

@@ -11,6 +11,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 执行流程：
 
+0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「状态机与记法规范」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。
 1. 检查 `planning/` 是否存在
 2. 读取以下文件（如果存在）：
    - requirement.md
@@ -18,7 +19,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
    - tasks.md
    - specifications.md
    - style_guide.md（位于项目根目录 `./style_guide.md`）
-3. 聚合状态信息，按 `change_type` 分组统计
+3. 聚合状态信息，按操作类型（新增 / 修改 / 废弃）分组统计
 4. 判断当前进度状态：
    - 无任务
    - 未完成
@@ -54,7 +55,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 - 所有 task 为 IMPLEMENTED
 - `planning/requirement.md` 的 `# Open Questions` 为空，或全部条目已标记 `[resolved]` / `[won't-fix]`
 
-以上为静态判定条件。动态验收门（全量回归 PASS、`# Goal` 可追溯确认）在「已完成状态 → 执行操作」step 1/2 执行，任一失败则转入未完成分支，不归档。
+以上为静态判定条件。轻量规格与常规规格共用状态表、以 `[新增|修改: 已验证]` 为终态，判定条件不变。动态验收门（全量回归 PASS、`# Goal` 可追溯确认）在「已完成状态 → 执行操作」step 1/2 执行，任一失败则转入未完成分支，不归档。
 
 ## 输出
 
@@ -112,10 +113,10 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 #### 执行操作
 
-1. 全量回归：调用 `/test-verify`（全量回归模式）执行全部规格测试 + 全量构建/类型检查。
+1. 全量回归：调用 `/test-verify`（全量回归模式）执行全部规格测试 + 全量构建/类型检查（新增/修改规格执行 `[自动化]` 测试；轻量规格执行轻量验收清单；废弃规格执行验证清单）。
    FAIL → 转入未完成分支，醒示修复路径，不归档
 2. 生成 `# Goal` 可追溯性清单：沿 `planning/requirement.md` `# Goal` → `planning/architecture.md` `# Changes` → `planning/tasks.md` → `planning/specifications.md` `Affected Files` 链推导，
-   输出「Goal 承诺 → task → spec → 测试文件」映射表，逐条请用户确认达成。任一未达成 → 不归档
+   输出「Goal 承诺 → task → spec → 验证手段」映射表（验证手段 = 测试文件 / 轻量验收 / 验证清单，按规格实际类型填写；轻量规格无测试文件，废弃规格为验证清单），逐条请用户确认达成。任一未达成 → 不归档
 3. 物理删除项目根目录 `_deprecated/`（若存在），并将 `planning/specifications.md` 中所有 `[废弃: 已解引用]` 规格状态更新为 `[废弃: 已删除]`
 4. 生成总结文件 `planning/summary.md`（含 Goal 可追溯性清单）
 5. 创建 `planning/archive/planning_{round}/` 子目录（`round` 取自 `planning/requirement.md` frontmatter）
@@ -144,7 +145,7 @@ description: 汇总当前任务进度，按变更类型分组统计，并在完�
 
 ## Goal 可追溯性清单
 
-| Goal 承诺 | Task | Spec | 测试文件 | 确认 |
+| Goal 承诺 | Task | Spec | 验证手段 | 确认 |
 |-----------|------|------|---------|------|
 | 用户 3 步内完成下单 | Task 1 / Task 3 | spec_a / spec_c | src/__tests__/a.test.ts | ✓ 达成 |
 
@@ -157,7 +158,7 @@ planning/archive/planning_XXXX/
 
 ### Changelist 格式
 
-`./changelist.md` 是跨轮次持久文件，每次归档后追写一轮。格式如下：
+`./changelist.md` 是跨轮次持久文件，每次归档后追写一轮。标题中的 `[type]` 为 `change_type`（feature / enhancement / refactor / bugfix / removal / chore / docs）。格式如下：
 
 ```md
 # Changelist
