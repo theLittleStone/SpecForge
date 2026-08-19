@@ -118,7 +118,7 @@ test / code / review 设计为由**互不信任的不同 agent** 执行：测试
 | `[废弃: 待修复]` | test-verify / code-review | 解引用验证未通过，按失败路由协议返工 |
 | `[废弃: 已删除]` | progress-report | `_deprecated/` 中代码已物理删除（progress-report 收尾），终态 |
 
-轻量规格与常规规格共用本状态表，仅跳过 test-generate 阶段（见「轻量 Spec」）。状态机总表与各命令的状态过滤规则的单点定义位于 `/setup` 写入的 `AGENTS.md`（§状态机与记法规范），命令文件内部行文使用竖线缩写 `[新增|修改: x]` 表示操作类型并列枚举；写入 planning/ 文档时必须写完整 `[操作类型: 状态]` 格式。
+轻量规格与常规规格共用本状态表，仅跳过 test-generate 阶段（见「轻量 Spec」）。状态机总表的单点定义位于 `/setup` 写入的 `AGENTS.md`（§状态机与记法规范），各命令的状态过滤规则定义在各自命令文件中。命令文件内部行文使用竖线缩写 `[新增|修改: x]` 表示操作类型并列枚举；写入 planning/ 文档时必须写完整 `[操作类型: 状态]` 格式。
 
 ### 失败路由协议（Issues 三分类）
 
@@ -192,7 +192,7 @@ git clone https://github.com/<your-org>/specforge.git ~/.config/opencode/
 cp -r commands/ skills/ ~/.config/opencode/
 ```
 
-安装后在 opencode 中运行 `/requirement-define` 即可启动流水线。
+安装后，在目标项目中先运行 `/setup` 初始化 `AGENTS.md`（各流水线命令前置检查该文件），再运行 `/requirement-define` 启动流水线。
 
 ---
 
@@ -216,7 +216,7 @@ cp -r commands/ skills/ ~/.config/opencode/
 
 | 命令 | 说明 |
 |------|------|
-| `/deep-debug` | 系统级 bug 排查，基于代码、测试与文档进行假设驱动分析 |
+| `/deep-debug` | 系统级 bug 排查，基于代码、接口与测试进行假设驱动分析 |
 | `/explain-to-me` | 解释代码、架构或技术概念，综合本地代码与网络信息 |
 | `/setup` | 初始化项目 `AGENTS.md`，写入流水线全局行为约束与 8 节工作流共识（交互协议 / 安全基线 / 执行约束 / 状态机与记法规范 / 失败路由协议 / 通用回滚协议 / 人工验证落地规则 / 轻量 spec 规则）。OpenCode 自动将其注入每个会话，各命令引用而不重复 |
 
@@ -224,15 +224,15 @@ cp -r commands/ skills/ ~/.config/opencode/
 
 ## 内建技能
 
-SpecForge 包含两个开箱即用的 opencode skill，在流水线中被自动调用：
+SpecForge 包含两个开箱即用的 opencode skill，供流水线按需调用：
 
 ### knowledge-augment
 
-补全编程语言、框架或库的领域知识，提供简洁示例与常见陷阱。在 requirements / specifications / code-generate / deep-debug 等阶段被按需调用。
+补全编程语言、框架或库的领域知识，提供简洁示例与常见陷阱。按需调用——deep-debug / explain-to-me 显式引用，AGENTS.md 安全基线亦允许各命令按需调用。
 
 ### style-resolver
 
-自动检测项目语言和框架，基于已有代码或社区惯例生成 `style_guide.md`，确保所有代码风格一致。在 test-generate / code-generate / code-review 阶段被自动调用。
+自动检测项目语言和框架，基于已有代码或社区惯例生成 `style_guide.md`，确保所有代码风格一致。由 test-generate / code-generate 在 `style_guide.md` 缺失时调用（code-review 仅读取既有 `style_guide.md` 作为审查依据，不生成）。
 
 ---
 
@@ -258,8 +258,6 @@ skills/                 # Agent 辅助技能
   style-resolver/
     SKILL.md
     style-guide-example.md
-config.json             # OpenCode 提供者配置（示例模板）
-package.json            # OpenCode 插件依赖
 ```
 
 ---

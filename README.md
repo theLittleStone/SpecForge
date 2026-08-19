@@ -118,7 +118,7 @@ Each spec flows through a strict state machine using the `[Operation: State]` fo
 | `[废弃: 待修复]` | test-verify / code-review | De-reference verification failed, rework via failure routing protocol |
 | `[废弃: 已删除]` | progress-report | Code physically deleted from `_deprecated/` (progress-report closeout), terminal |
 
-Lightweight specs share this state machine with regular specs, skipping only the test-generate phase (see "Lightweight Specs"). The canonical 16-state table and each command's state-filter rules live in the `AGENTS.md` written by `/setup` (§ State Machine & Notation); command files use the pipe shorthand `[新增|修改: x]` for parallel enumeration, but the full `[OperationType: State]` form is mandatory when writing into planning/ documents.
+Lightweight specs share this state machine with regular specs, skipping only the test-generate phase (see "Lightweight Specs"). The canonical 16-state table lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation); each command's state-filter rules live in its own command file. Command files use the pipe shorthand `[新增|修改: x]` for parallel enumeration, but the full `[OperationType: State]` form is mandatory when writing into planning/ documents.
 
 ### Failure Routing Protocol (Issues Three-Class)
 
@@ -192,7 +192,7 @@ git clone https://github.com/<your-org>/specforge.git ~/.config/opencode/
 cp -r commands/ skills/ ~/.config/opencode/
 ```
 
-After installation, run `/requirement-define` in opencode to start the pipeline.
+After installation, run `/setup` in the target project to initialize `AGENTS.md` (every pipeline command checks for it first), then start the pipeline with `/requirement-define`.
 
 ---
 
@@ -216,7 +216,7 @@ After installation, run `/requirement-define` in opencode to start the pipeline.
 
 | Command | Description |
 |---------|-------------|
-| `/deep-debug` | System-level bug investigation using hypothesis-driven analysis of code, tests, and documentation |
+| `/deep-debug` | System-level bug investigation using hypothesis-driven analysis of code, interfaces, and tests |
 | `/explain-to-me` | Explain code, architecture, or technical concepts by synthesizing local code with web information |
 | `/setup` | Initialize project `AGENTS.md` with pipeline-wide behavior constraints and the 8-section workflow consensus (interaction protocol / safety baseline / execution constraints / state machine & notation / failure routing protocol / unified rollback protocol / manual-landing rule / lightweight spec rule). OpenCode auto-injects it into every session; commands reference it instead of duplicating |
 
@@ -224,15 +224,15 @@ After installation, run `/requirement-define` in opencode to start the pipeline.
 
 ## Built-in Skills
 
-SpecForge ships with two opencode skills that are invoked automatically during the pipeline:
+SpecForge ships with two opencode skills that the pipeline invokes on demand:
 
 ### knowledge-augment
 
-Fills knowledge gaps about programming languages, frameworks, and libraries with concise examples and common pitfalls. Called on-demand during requirement analysis, specification definition, code generation, and debugging.
+Fills knowledge gaps about programming languages, frameworks, and libraries with concise examples and common pitfalls. Invoked on demand — explicitly referenced by deep-debug / explain-to-me, and the AGENTS.md safety baseline lets any command call it.
 
 ### style-resolver
 
-Auto-detects the project's language and framework, then generates `style_guide.md` based on existing code conventions or community standards. Called automatically by test-generate / code-generate / code-review to ensure consistent code style.
+Auto-detects the project's language and framework, then generates `style_guide.md` based on existing code conventions or community standards. Invoked by test-generate / code-generate when `style_guide.md` is missing (code-review only reads the existing `style_guide.md` as audit basis; it never generates one) to ensure consistent code style.
 
 ---
 
@@ -258,8 +258,6 @@ skills/                 # Agent auxiliary skills
   style-resolver/
     SKILL.md
     style-guide-example.md
-config.json             # OpenCode provider config (example template)
-package.json            # OpenCode plugin dependency
 ```
 
 ---
