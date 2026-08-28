@@ -8,14 +8,14 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
 取代原 specification-define。核心变化：
 
 - **规格按需展开**：规格不再在任务分解后一次性全量定义，而是每个工作项在执行前由本命令展开（specification-as-contract——信息最充分时定义，上游改动不会让预定义规格全废）
-- **失效单位收窄**：`[规格缺陷]` 的返工单位从「整 task 回滚」降为「该工作项规格 + 其 Interface 依赖者」（AGENTS.md §局部失效协议）
+- **失效单位收窄**：`[规格缺陷]` 的返工单位从「整 task 回滚」降为「该工作项规格 + 其 Interface 依赖者」（AGENTS.md §统一失效协议）
 - 每次执行**恰好处理一个工作项**（禁止跨工作项拆解），与执行侧「一次一工作项」约束一致
 
 ## 行为规则
 
 执行流程：
 
-0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「失败路由协议」「局部失效协议」「轻量 spec 规则」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止
+0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「失败路由协议」「统一失效协议」「轻量 spec 规则」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止
 1. 读取 `planning/plan.md` 与 `planning/specs.md`
 2. 确定处理对象：
    - **规格展开主线**：首个「Depends On 全部 DONE」的 TODO 工作项（活跃工作项）
@@ -24,31 +24,32 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
    - **Spec**：做什么——具体到可直接生成 diff（指明目标文件与期望行为），禁止模糊描述
    - **Interface**：精确的函数签名 / API 端点 / 类型定义，**必须支持依赖注入**（Test Double 可替换生产实现）；轻量规格可省略（理由写入 Spec）
    - **Test Double**（可选）：仅当 Interface 触及开放边界（外部 API / 数据库 / 时间 / 文件系统）——类型、数据结构、行为约定、暴露接口
-   - **Test Cases**：`[自动化]` 条目验证 WHAT 行为；`[人工]` 条目须含操作 / 预期 / 通过标准三要素
+   - **Test Cases**：`[自动化]` 条目验证 WHAT 行为，且**双轨标注角色**——`F2P`（问题验证，基态必须 FAIL）/ `P2P`（回归保护，基态必须 PASS）；每非轻量规格至少 1 个 `[自动化] F2P` 条目；条目引用的符号必须已在 Interface 段定义；`[人工]` 条目须含操作 / 预期 / 通过标准三要素
+   - **上游变更因果链**（可选，依赖变更时必写）：该工作项 Depends On 的依赖项发生 API 签名 / 数据结构变更时，抄录因果链（如「W1 变更 create_order 签名 → 本工作项更新调用方」），供执行侧理解「为什么改」（CodePlan 时间上下文）
 4. **工作项过大**（一个 diff 装不下：多文件重写或多个独立行为）→ 拆分子工作项回写 `planning/plan.md`（登记依赖），逐个展开——这是计划图的**运行时分解**（Deferred 落地）
 5. 展示规格预览 → 用户确认 → 写入 `planning/specs.md` → 工作项状态更新为 `ACTIVE`
-6. 提醒用户下一步命令（常规 → `/test-generate`；轻量/废弃 → `/code-generate`）
+6. 提醒用户下一步命令（常规 → `/execute`；轻量/废弃 → `/execute`）
 
 ### `[规格缺陷]` 的受理
 
-触发：规格 `Issues` 以 `[规格缺陷]` 开头（由 test-verify / code-review 按 AGENTS.md §失败路由协议 分类路由）。
+触发：规格 `Issues` 以 `[规格缺陷]` 开头（由 execute 对侧判定按 AGENTS.md §失败路由协议 分类路由）。
 
-1. 按 AGENTS.md §局部失效协议 定位失效范围：该规格 + **其 Interface 依赖者**（引用了该规格 Interface 的规格）
-2. 失效处理：失效范围内规格状态重置为初始态（`[新增|修改: 已定义]` / `[废弃: 待删除]`）、Retry Count 归零、**定义文本保留**；仅失效范围内 `Affected Files` 涉及的代码需要重做（git restore 按需，见 §局部失效协议）
+1. 按 AGENTS.md §统一失效协议 定位失效范围：该规格 + **其 Interface 依赖者**（引用了该规格 Interface 的规格）
+2. 失效处理：失效范围内规格状态重置为初始态（`[新增|修改: 已定义]` / `[废弃: 待删除]`）、Retry Count 与实现预算归零、**定义文本保留、Attempt Log 保留为负证据**；仅失效范围内 `Affected Files` 涉及的代码需要重做（git restore 按需，见 §统一失效协议）
 3. 通过正常提案流程重定义缺陷规格：修订 Spec / Interface / Test Cases，清空 `Issues`，重置 Retry Count
 4. 检查同工作项兄弟规格在代码失效后是否仍成立（定义修订无代码成本，无需额外失效）
-5. 工作项保持 `ACTIVE`；提醒用户按失效范围重新运行 `/test-generate`
+5. 工作项保持 `ACTIVE`；提醒用户按失效范围重新运行 `/execute`
 
 ### 轻量与废弃
 
 - **轻量**：change_type 为 chore / docs → 自动轻量；其他类型声明轻量必须说明理由并经用户确认（agent 不得自行降级）。轻量规格可省略 Interface（Spec 中说明），Test Cases 允许仅含 `[人工]` 条目或构建/类型检查清单
-- **废弃（removal）**：Spec 必须显式命名目标文件/函数；Interface 重释为「不破坏契约」——列出受影响模块与依赖者；Depended By **以 grep 实测为准**（plan.md 不设模块索引）；Test Cases 替换为验证清单（受影响模块定向测试 + 全量构建 + grep 引用扫描）；测试优先不适用，直接 `/code-generate` 解引用
+- **废弃（removal）**：Spec 必须显式命名目标文件/函数；Interface 重释为「不破坏契约」——列出受影响模块与依赖者；Depended By **以 grep 实测为准**（plan.md 不设模块索引）；Test Cases 替换为验证清单（受影响模块定向测试 + 全量构建 + grep 引用扫描）；测试优先不适用，直接 `/execute` 解引用
 
 ## 输入来源
 
 | 文件 | 用途 | 关键内容 |
 | ------ | ------ | --------- |
-| `planning/plan.md` | 计划图 | 工作项：ID / 变更类型 / 描述 / Depends On / Affects / 设计引用 / 状态；复杂度与失败路由（含覆盖声明） |
+| `planning/plan.md` | 计划图 | 工作项：ID / 变更类型（含验证深度） / 描述 / Depends On / Affects / 设计引用 / 状态；复杂度与失败路由（含覆盖声明） |
 | `planning/specs.md` | 规格库 | 既有规格（`[规格缺陷]` 受理时定位目标规格与 Interface 依赖者） |
 | 代码库 | 探索 | 废弃规格的 Depended By grep 实测；开放边界识别 |
 
@@ -56,13 +57,13 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
 
 仅处理当前活跃工作项（`planning/plan.md` 中首个「Depends On 全部 DONE」的 TODO 工作项）。若不存在可展开的 TODO 工作项：
 
-- 存在 ACTIVE 工作项（执行中）→ 提醒用户按该工作项状态继续流水线（`/test-generate` → `/code-generate` → `/test-verify` → `/code-review`）
+- 存在 ACTIVE 工作项（执行中）→ 提醒用户运行 `/execute` 按该工作项规格状态继续执行
 - 全部 DONE → 提醒用户运行 `/progress-report` 收尾
 - 工作项全空 → 提醒用户先运行 `/plan` 开启轮次
 
 ## 输出
 
-在 `planning/specs.md` 追加规格（规格标题标记沿用 16 态记法：`## [新增: 已定义] name` 等），`Task: Task N` 字段改为 `Work Item: Wn`；工作项状态 TODO → ACTIVE；过大时同步更新 `planning/plan.md` 工作项表。
+在 `planning/specs.md` 追加规格（规格标题标记沿用状态机记法：`## [新增: 已定义] name` 等），`Task: Task N` 字段改为 `Work Item: Wn`；工作项状态 TODO → ACTIVE；过大时同步更新 `planning/plan.md` 工作项表。
 
 ### Markdown 预览
 
@@ -73,8 +74,10 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
 - **Spec**: <目标文件与期望行为>
 - **Interface**: <精确签名/端点/类型定义，依赖注入点>
 - **Test Double**: <类型与数据结构（如有开放边界）>
+- **上游变更因果链**: <依赖变更时抄录，如「W1 变更 xxx 签名 → 本工作项更新调用方」>
 - **Test Cases**:
-  - [自动化] <WHAT 行为验证>
+  - [自动化][F2P] <新行为验证，基态必须失败>
+  - [自动化][P2P] <既有行为回归保护>
   - [人工] 操作: <…> / 预期: <…> / 通过标准: <…>
 
 ## 工作项状态
@@ -90,9 +93,9 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
 
 ## 下一步
 
-- 常规规格定义完成 → 提醒用户运行 `/test-generate`（RED）
-- 轻量/废弃 → 提醒用户直接运行 `/code-generate`
-- `[规格缺陷]` 受理完成 → 按失效范围提醒用户重新运行 `/test-generate`
+- 常规规格定义完成 → 提醒用户运行 `/execute`（T 视角写测试 → RED）
+- 轻量/废弃 → 提醒用户直接运行 `/execute`（轻量：直接实现；废弃：解引用）
+- `[规格缺陷]` 受理完成 → 按失效范围提醒用户重新运行 `/execute`
 
 ## 约束
 
@@ -101,6 +104,6 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
 - 工作项过大时必须拆分并回写 plan.md，禁止产出超大一页规格
 - 未决问题未关闭的工作项不得展开（先由 `/plan` 修订）
 - 禁止自行声明轻量（chore / docs 除外）
-- `[规格缺陷]` 受理只失效「该规格 + Interface 依赖者」，不得整 task 回滚（AGENTS.md §局部失效协议）
+- `[规格缺陷]` 受理只失效「该规格 + Interface 依赖者」，不得整 task 回滚（AGENTS.md §统一失效协议）
 - 废弃规格必须显式命名目标，禁止模糊描述；Depended By 以 grep 实测为准
 - 写文件前必须展示预览并等待用户确认
