@@ -62,7 +62,7 @@ flowchart TD
 
 **Three phases**:
 
-1. **Planning (adaptive)** — `/plan` runs the Socratic dialogue (why / assumptions / alternatives / boundaries), explores the codebase, assesses complexity (`minimal | task | full`), and produces a **plan graph** (`planning/plan.md`: work items with dependencies, failure routes, verification depth per change type). `/specify` expands the active work item into a spec contract (`planning/specs.md`) lazily — right before it enters execution. When a work item turns out too large, it is split and written back into the graph (runtime decomposition). Plan revisions propagate through **change classification + impact rules** and invalidate only affected work items.
+1. **Planning (adaptive)** — `/plan` runs the Socratic dialogue (why / assumptions / alternatives / boundaries), explores the codebase, assesses complexity (`minimal | task | full`), and produces a **plan graph** (`planning/plan.md`: work items with dependencies, failure routes, verification depth per change type). `/specify` expands the active work item into a spec contract (`planning/specs.md`) lazily — right before it enters execution. When a work item turns out too large, it is split and written back into the graph (runtime decomposition). Plan revisions propagate through **change classification + impact rules** and invalidate only affected work items. Unresolved questions are recorded in the requirement node of plan.md and must be closed (`[resolved]` / `[won't-fix]`) before the round can be closed.
 
 2. **Execution (T/C cross-verification loop)** — `/execute` processes exactly one work item: each spec runs the T → C → T cycle. T writes tests (self-confirming RED), C reproduces RED and audits the tests, C implements (hypothesis-driven, recorded in the Attempt Log), T verifies GREEN and audits the implementation. Verification is layered L1–L5 with depth derived from the change type. Failures are judged by the opposite side, classified into three classes, and routed through a **dynamic budget** (L0 → L1 debug report → L2 multi-candidate → L3 forced routing). When all specs reach terminal state, the work item is closed via a cross-spec check and **user confirmation** before marking DONE.
 
@@ -99,19 +99,9 @@ Total implementation attempts ≤ 4. `[测试缺陷]` rework is capped at 2 (the
 
 Each spec flows through a strict state machine using the `[Operation: State]` format — the **inter-agent contract language**: each view reads a spec's state to decide what to do, and states are advanced only by the view that owns them. Retry counters and budget positions live in the **Attempt Log**, not in the state machine.
 
-| State Label | Set By | Meaning |
-| ------------- | -------- | --------- |
-| `[新增\|修改: 已定义]` | specify | Spec defined, ready for execution (lightweight: ready to implement) |
-| `[新增\|修改: 测试中]` | execute (T view) | Tests / Test Double being written |
-| `[新增\|修改: 测试已验收]` | execute (C view) | C reproduced RED + audited tests — accepted, ready to implement |
-| `[新增\|修改: 实现中]` | execute (C view) | Implementation being written (Attempts in Attempt Log) |
-| `[新增\|修改: 已验收]` | execute (T view) | T verified GREEN + audited implementation — accepted; entering layered verification & manual items |
-| `[新增\|修改: 待修复]` | execute (opposite-side judgment) | Acceptance failed; rework via the failure routing protocol |
-| `[新增\|修改: 已验证]` | execute (after user confirmation) | Layered verification + `[人工]` items + user confirmation (terminal) |
-| `[废弃: 待删除]` | specify | Spec defined (with removal target and `Depended By`), awaiting de-reference |
-| `[废弃: 已解引用]` | execute (C view) | Referrers all removed, code moved to `_deprecated/`, verification checklist passed |
-| `[废弃: 待修复]` | execute (opposite-side judgment) | De-reference verification failed; rework via the failure routing protocol |
-| `[废弃: 已删除]` | progress-report | Code physically deleted from `_deprecated/` (closeout), terminal |
+Normal track: `[新增|修改: 已定义]` → `[测试中]` → `[测试已验收]` → `[实现中]` → `[已验收]` → `[已验证]` (terminal); the rework state `[待修复]` loops back via the failure routing protocol. Deprecation track: `[废弃: 待删除]` → `[已解引用]` → `[已删除]` (terminal). The canonical table — including who sets each state — lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation).
+
+Removal is behavior reduction, not test-first work: `/specify` records the removal target and its `Depended By` (real `grep` scan) and writes a verification checklist (targeted tests / full build / grep scan) into `Test Cases`; `/execute` skips test writing, the C view de-references and moves the code into `_deprecated/`, then runs the checklist; `progress-report` physically deletes `_deprecated/` and sets `[废弃: 已删除]`.
 
 Work items carry a coarse three-state marker in plan.md: `TODO` (not yet expanded) → `ACTIVE` (spec defined or executing) → `DONE` (all specs terminal); details live in the spec state machine. The canonical table lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation); each command's state-filter rules live in its own command file. The pipe shorthand `[新增|修改: x]` is allowed inside command files but the full `[OperationType: State]` form is mandatory when writing into planning/ documents.
 
@@ -162,45 +152,26 @@ Not every change suits test-first. Specs with `change_type` of `chore` / `docs` 
 
 Note: lightweight (document-level, saves Interface fields) and `minimal` complexity (process-level, saves the design layer in `/plan`) are orthogonal concepts that can stack.
 
-### Manual Verification Persistence
-
-`[人工]` tests are not verbal: the execution side guides the user through each item and writes the result back to the Test Cases entry in specs.md (`✓ PASS` / `✗ FAIL — <note>`). State must not advance to `[已验证]` until results are landed; the opposite side uses these landed marks as the sole cross-session evidence of manual acceptance.
-
-### Deprecated Code Lifecycle
-
-Removal is a behavior reduction, not test-first work. Deprecated specs flow through a dedicated lifecycle:
-
-1. **Define**: `/specify` records the removal target and its `Depended By` (derived from a real `grep` scan of the codebase), and writes the verification checklist (targeted tests / full build / grep scan) into `Test Cases`
-2. **Skip test writing**: no tests, no RED
-3. **De-reference & move**: the C view removes all references, moves the code into `_deprecated/` (excluded from build/test config), runs the verification checklist (L1–3 including grep scan)
-4. **Closeout**: `progress-report` physically deletes `_deprecated/` and sets `[废弃: 已删除]`
+`[人工]` verification is not verbal: the execution side guides the user through each item and writes the result back to the Test Cases entry in specs.md (`✓ PASS` / `✗ FAIL — <note>`); the spec must not advance to `[已验证]` until results are landed. The same rule applies to regular specs (L5).
 
 ### Change Classification & Impact Rules + Verification Depth
 
 Instead of a maintained module index, work items carry a change type from a small set, each with deterministic impact rules **and a verification depth**: internal implementation (localized: file + direct callers → L1-2), API signature change (callers + override hierarchy + dependent files → L1-3), data structure change (readers/writers + persistence + serialization → L1-3), pure addition (new files + integration points → L1-2), pure removal (referrers, grep-verified → L1-3), docs/config (respective files → lightweight L1). `Affects` is derived from these rules rather than from free-form impact analysis; references are always verified by actual grep scans.
 
-### Socratic Requirements Gathering
-
-`/plan` does not blindly accept user descriptions. Instead, it asks "why", challenges implicit assumptions, explores alternatives, and exhausts edge cases before drafting. Only after reaching deep consensus with the user does it produce the plan graph. Unresolved questions are recorded in the requirement node of plan.md and must be closed (`[resolved]` / `[won't-fix]`) before the round can be closed.
-
-### Execution Evidence (Closeout)
-
-`progress-report` aggregates per-work-item execution evidence: attempt counts, verification rounds, dispute counts, **PTS phase summaries** (Locate/Patch/Verify runs), and **F2P/P2P pass rates** split by track — identifying the weakest sub-process for the next round (Process-Centric metrics). The work-item summary at DONE includes the same evidence, so the user confirms completion with data, not vibes.
-
 ### Cross-Round Archival
 
-When a round completes, `progress-report` first enforces hard acceptance gates — L4 full regression PASS, `# Goal` traceability confirmed, and all unresolved questions closed. It then physically deletes `_deprecated/`, auto-generates a summary (incl. Goal traceability + execution evidence), archives all planning files to `planning/archive/`, appends an entry to `changelist.md`, and preserves historical context for the next round. (`style_guide.md` stays in the project root for reuse across rounds; it is not archived.)
+When a round completes, `progress-report` first enforces hard acceptance gates — L4 full regression PASS, `# Goal` traceability confirmed, and all unresolved questions closed. It then aggregates per-work-item **execution evidence** (attempt counts, verification rounds, dispute counts, PTS phase summaries, and F2P/P2P pass rates split by track) to locate the weakest sub-process for the next round, physically deletes `_deprecated/`, auto-generates a summary (incl. Goal traceability + execution evidence), archives all planning files to `planning/archive/`, appends an entry to `changelist.md`, and preserves historical context for the next round. (`style_guide.md` stays in the project root for reuse across rounds; it is not archived.)
 
 ---
 
 ## Installation
 
 ```bash
-# Clone into opencode config directory
-git clone https://github.com/<your-org>/specforge.git ~/.config/opencode/
+# Clone into the opencode config directory
+git clone https://github.com/theLittleStone/SpecForge.git ~/.config/opencode/
 
-# Or just copy the commands and skills
-cp -r commands/ skills/ ~/.config/opencode/
+# Or just copy the commands
+cp -r commands/ ~/.config/opencode/
 ```
 
 After installation, run `/setup` in the target project to initialize `AGENTS.md` (every pipeline command checks for it first), then start the pipeline with `/plan`.
