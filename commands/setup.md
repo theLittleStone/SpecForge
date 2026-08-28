@@ -8,7 +8,7 @@ description: 初始化项目 AGENTS.md，写入流水线全局行为约束与工
 该命令用于在当前 OpenCode 工作目录下创建 `AGENTS.md` 文件，写入流水线全局行为约束与工作流共识规则。
 OpenCode 启动时自动读取工作目录下的该文件并注入每个会话上下文，作为全部流水线命令的公共共识。
 
-共识共 8 节：交互协议、安全基线、执行约束、状态机与记法规范、失败路由协议、通用回滚协议、人工验证落地规则、轻量 spec 规则。各命令文件不再重复这些规则，仅引用本节名称。
+共识共 8 节：交互协议、安全基线、执行约束、状态机与记法规范、失败路由协议、局部失效协议、人工验证落地规则、轻量 spec 规则。各命令文件不再重复这些规则，仅引用本节名称。
 
 ## 行为规则
 
@@ -37,28 +37,29 @@ OpenCode 启动时自动读取工作目录下的该文件并注入每个会话�
 - 知识盲区用 grep/glob/websearch，必要时调 knowledge-augment 或 style-resolver。
 
 ## 执行约束
-- 一次只处理一个 task。活跃 task = tasks.md 首个 [DEFINED]。
-- 变更代码后同步维护模块引用索引（architecture.md 的 `# Dependency Index` 与规格的 `Depended By`；废弃规格的 `Depended By` 以 grep 实际引用扫描为准）。废弃模块先解引用再移入 `_deprecated/`，禁止直接删除。
+- 一次只处理一个工作项。活跃工作项 = plan.md 中首个「Depends On 全部 DONE」的 TODO/ACTIVE 工作项。
+- 废弃模块先解引用再移入 `_deprecated/`，禁止直接删除。引用与影响面以 grep 实际扫描为准，不设模块索引。
 - 轮内禁止 git 提交。git 提交仅由 progress-report 在归档收尾后执行。
 
 ## 状态机与记法规范
 - 规格标题标记采用 `[操作类型: 状态]` 完整格式，共 16 态。状态机是跨 agent 的交接契约语言：每个命令读取规格状态决定行为，状态只由拥有它的命令推进。
+- 工作项状态三态：`TODO`（未展开规格）→ `ACTIVE`（规格已定义或执行中）→ `DONE`（该工作项全部规格终态）。工作项状态由 plan.md 管理，活跃工作项确定后，其规格由对应命令推进 16 态。
 
 | 状态 | 设置者 | 含义 |
 |------|--------|------|
-| `[新增: 已定义]` | specification-define | 规格已定义，待生成测试（轻量规格待直接实现） |
+| `[新增: 已定义]` | specify | 规格已定义，待生成测试（轻量规格待直接实现） |
 | `[新增: 测试已生成]` | test-generate | 测试已生成并确认 RED，待实现 |
 | `[新增: 已实现]` | code-generate | 代码已实现，待验证 |
 | `[新增: 已测试]` | test-verify | 已通过测试，待审查 |
 | `[新增: 待修复]` | test-verify / code-review | 验证未通过，按失败路由协议返工 |
 | `[新增: 已验证]` | code-review | 已通过审查（终态） |
-| `[修改: 已定义]` | specification-define | 修改规格已定义，待生成测试（轻量规格待直接实现） |
+| `[修改: 已定义]` | specify | 修改规格已定义，待生成测试（轻量规格待直接实现） |
 | `[修改: 测试已生成]` | test-generate | 修改测试已生成并确认 RED，待实施 |
 | `[修改: 已实现]` | code-generate | 修改已实施，待验证 |
 | `[修改: 已测试]` | test-verify | 修改已通过测试，待审查 |
 | `[修改: 待修复]` | test-verify / code-review | 修改验证未通过，按失败路由协议返工 |
 | `[修改: 已验证]` | code-review | 修改已通过审查（终态） |
-| `[废弃: 待删除]` | specification-define | 已定义（含待删目标与 Depended By），待解引用 |
+| `[废弃: 待删除]` | specify | 已定义（含待删目标与 Depended By），待解引用 |
 | `[废弃: 已解引用]` | code-generate | 引用方已全部移除，代码已移入 `_deprecated/`，验证清单通过 |
 | `[废弃: 待修复]` | test-verify / code-review | 解引用验证未通过，按失败路由协议返工 |
 | `[废弃: 已删除]` | progress-report | `_deprecated/` 代码已物理删除（收尾），终态 |
@@ -70,21 +71,24 @@ OpenCode 启动时自动读取工作目录下的该文件并注入每个会话�
 - 失败信息统一写入规格的 `Issues` 字段，格式 `[类型] <失败详情>`。类型三选一，决定返工路由：
   - `[实现缺陷]` → 运行 `/code-generate` 修复实现
   - `[测试缺陷]` → 运行 `/test-generate` 修复测试代码
-  - `[规格缺陷]` → 运行 `/specification-define` 重定义规格
+  - `[规格缺陷]` → 运行 `/specify` 重定义该工作项规格（单规格 + Interface 依赖者失效，见局部失效协议）
 - 裁决方（test-verify / code-review）写入 Issues 时必须同时分类并给出路由建议；实现方（code-generate）仅在举证且用户确认后调整分类。
 - 实现方永不修改测试代码。疑似测试错误只能分类路由。
 - Retry Count ≥ 3 时必须三选一路由，禁止盲目重试。
+- 失败时先检查上游依赖是否变更（如上游 API 签名变更导致本规格断言失败）——表面报错点可能不是根因点，沿依赖边溯源后再分类。
 
-## 通用回滚协议
-上游命令修改规划文档/规格且下游已产生代码时，按本协议回滚：
-- 回滚范围：requirement / architecture / task 级修改 = 本轮全部规格；specification 级重定义（含 `[规格缺陷]` 路由）= 当前 task 全部规格（整 task 回滚）。
-1. 汇总回滚范围内全部规格的 `Affected Files`，去重。
-2. 重叠守卫：与回滚范围**之外**所有 `[新增|修改: 已验证]`、`[废弃: 已解引用]` 规格的 `Affected Files` 求交集。
-   - 无交集 → 输出 `git restore --source <baseline> <file1> <file2> ...`（baseline 取自 requirement.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）
-   - 有交集 → 交集文件禁止自动回滚，列出并醒示「该文件含已验证规格的改动，请人工精确回退本次变更的片段；重新实现后由 /code-review 影响范围回归重新验证」
-3. 过滤 `planning/` 目录下的文件与 `_deprecated/` 内路径。
-4. 特殊处理：范围含 `[废弃: 已解引用]` → 另需删除项目根目录 `_deprecated/` 及其中的移动副本；含 `[废弃: 已删除]` → 代码已物理删除，须用 `git log --diff-filter=D` 从 git 历史定位找回；git 未跟踪的新文件 → 提醒手动删除。
-5. 状态重置：回滚范围内的规格全部重置为初始状态（`[新增|修改: 已定义]`、`[废弃: 待删除]`）；同时按级别重置 tasks.md 的 task 标记——requirement / architecture / task 级回滚将全部 task 标记重置为 `[TODO]`（任务描述保留，重跑 `/task-breakdown` 与 `/specification-define` 时复核修订，既有规格以 `[已定义]` 状态在原地修订，不得重复新建）；specification 级回滚（整 task）task 保持 `[DEFINED]`。planning/ 文档保留，提醒重跑下游。
+## 局部失效协议（取代原通用回滚协议）
+规划修订（/plan 模式 B）或 `[规格缺陷]` 受理（/specify）触发上游变更时，不整轮回滚，按以下分级处理：
+
+1. **定位失效范围**：变更分类 + 影响规则推导受影响工作项集；`[规格缺陷]` 的失效范围 = 该规格 + 其 Interface 依赖者。
+2. **分级处理**：
+   - DONE 且文件无重叠 → 不动（已验证状态不因无关修订被破坏）
+   - TODO（未展开规格）→ 直接修订计划，零成本
+   - ACTIVE（代码已落地）→ 规格状态重置为初始态（`[新增|修改: 已定义]` / `[废弃: 待删除]`）、Retry Count 归零、定义文本保留，工作项标记「待重做」
+3. **重叠守卫**：失效范围内规格的 `Affected Files` 与范围外终态规格（`[新增|修改: 已验证]` / `[废弃: 已解引用]`）的 `Affected Files` 求交集——有交集 → 交集文件禁止自动失效/回滚，列出并醒示「该文件含范围外已验证规格的改动，请人工精确处理；重新实现后由 /code-review 影响范围回归重新验证」。
+4. **代码恢复按需**：默认不执行 git restore——代码保留，由重做覆盖（保留现场证据、避免级联重跑）。仅当用户明确要求恢复或代码现场严重污染（agent 判断 + 用户确认）时执行 `git restore --source <baseline> <file>...`（baseline 取自 plan.md frontmatter；若为 none/空，省略 `--source` 退化为默认 HEAD）。过滤 `planning/` 目录下文件与 `_deprecated/` 内路径。git 未跟踪的新文件 → 提醒手动删除。
+5. **负证据**：失效原因记入 plan.md「负证据」区，同一方案不得原样重试。
+6. 规划文档保留，提醒重跑下游：失效规格重新 `/specify`（[规格缺陷]）或按 Issues 分类路由。
 
 ## 人工验证落地规则
 - `[人工]` 测试条目由用户在 code-generate 阶段逐项执行，code-generate 必须把结果回写 specs.md 对应 Test Cases 条目：通过追加 `✓ PASS`，失败追加 `✗ FAIL — <失败备注>`（含用户反馈）。
@@ -95,6 +99,7 @@ OpenCode 启动时自动读取工作目录下的该文件并注入每个会话�
 - 流转：跳过 test-generate，`[新增|修改: 已定义]` → /code-generate 实现 → /test-verify 轻量验收 → /code-review 审查。
 - 轻量规格可省略 Interface（须在 Spec 中说明）；Test Cases 允许仅含 `[人工]` 条目或构建/类型检查清单。
 - 轻量验收 = 全量构建 + 类型检查（若适用）+ `[人工]` 条目全部落地为 `✓ PASS`。
+- 注：轻量 spec（省文档字段）与 minimal 复杂度（省规划层，见 /plan）是正交概念，可叠加。
 ```
 
 ## 约束

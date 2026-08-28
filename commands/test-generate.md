@@ -11,9 +11,10 @@ description: TDD 红阶段——根据规格的 Interface 和 Test Cases 生成�
 对 `[人工]` 条目汇编为结构化 checklist，不生成代码。
 
 根据规格的操作类型，采用不同的测试策略：
+
 - **新增**：完整功能测试（通过公共接口验证行为）。若 spec 声明了 Test Double，先生成 Test Double 实现，测试注入 Test Double
 - **修改**：回归测试 + 新行为验证。若 spec 声明了 Test Double，先生成 Test Double 实现，测试注入 Test Double
-- **废弃**：跳过测试生成——验证手段已由 specification-define 以清单形式写入 `Test Cases`（受影响模块定向测试、全量构建、grep 引用扫描），由 `/code-generate` 解引用后经 `/test-verify` 执行
+- **废弃**：跳过测试生成——验证手段已由 specify 以清单形式写入 `Test Cases`（受影响模块定向测试、全量构建、grep 引用扫描），由 `/code-generate` 解引用后经 `/test-verify` 执行
 - **轻量**：跳过测试生成——轻量规格无 `[自动化]` 用例，由 `/code-generate` 直接实现，经 `/test-verify` 轻量验收
 
 本命令同时是测试代码的唯一责任方：受理 AGENTS.md §失败路由协议 路由而来的 `[测试缺陷]` 规格，修复其测试代码。其他任何命令不得修改测试代码。
@@ -23,7 +24,7 @@ description: TDD 红阶段——根据规格的 Interface 和 Test Cases 生成�
 执行流程：
 
 0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「失败路由协议」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。读取 `./style_guide.md`。如不存在，调用 `style-resolver` skill 从项目配置自动生成代码风格规范，经用户确认后写入，再继续后续流程
-1. 读取 `planning/specifications.md`
+1. 读取 `planning/specs.md` 与 `planning/plan.md`
 2. 确定处理对象：
    - **RED 主线**：选取非轻量的 `[新增|修改: 已定义]` 规格（`[废弃: 待删除]` 与轻量 `[新增|修改: 已定义]` 跳过，提醒直接 `/code-generate`）
    - **测试缺陷受理**：选取 `Issues` 以 `[测试缺陷]` 开头的 `[新增|修改: 待修复]` 规格（见「`[测试缺陷]` 规格的受理」）
@@ -67,13 +68,13 @@ description: TDD 红阶段——根据规格的 Interface 和 Test Cases 生成�
 4. 清空 `Issues`，重置 `Retry Count` 为 0，状态回写 `[新增: 测试已生成]` 或 `[修改: 测试已生成]`
 5. **不做 RED 重新确认**——实现代码可能已存在，RED 前提不适用；测试正确性以规格为准，行为验证交给 GREEN。提醒用户「测试已修复，请重新运行 `/code-generate` 继续 GREEN 验证」
 
-若修复中发现测试期望与规格本身矛盾，问题不在测试而在规格：不修改测试，将 `Issues` 改写为 `[规格缺陷] <说明>`，醒示用户运行 `/specification-define`。
+若修复中发现测试期望与规格本身矛盾，问题不在测试而在规格：不修改测试，将 `Issues` 改写为 `[规格缺陷] <说明>`，醒示用户运行 `/specify`。
 
 ### 废弃规格与轻量规格的处理
 
 `[废弃: 待删除]` 与轻量规格不进入本命令——不生成任何测试代码，也不做 RED 确认：
 
-- 废弃规格的验证手段已在 specification-define 阶段以清单形式写入 `Test Cases`（受影响模块定向测试、全量构建、grep 引用扫描），由 `/code-generate` 完成解引用与移动后，经 `/test-verify` 执行
+- 废弃规格的验证手段已在 specify 阶段以清单形式写入 `Test Cases`（受影响模块定向测试、全量构建、grep 引用扫描），由 `/code-generate` 完成解引用与移动后，经 `/test-verify` 执行
 - 轻量规格无 `[自动化]` 用例（其 `Test Cases` 仅含 `[人工]` 条目或构建/类型检查清单），由 `/code-generate` 直接实现，经 `/test-verify` 轻量验收
 
 ### 测试质量规范
@@ -100,7 +101,7 @@ Agent 生成测试时必须遵循以下纪律。这些规则确保测试在代�
 #### Mock 纪律：仅在系统边界 Mock
 
 | 应该 Mock | 不应该 Mock |
-|-----------|------------|
+| ----------- | ------------ |
 | 外部 API（支付、邮件、第三方服务） | 自己的类/模块 |
 | 数据库（优先使用测试专用 DB） | 内部协作者 |
 | 时间/随机数 | 项目中可控制的对象 |
@@ -119,10 +120,10 @@ Agent 生成测试时必须遵循以下纪律。这些规则确保测试在代�
 ### 上游文档
 
 | 文件 | 用途 | 关键内容 |
-|------|------|---------|
+| ------ | ------ | --------- |
 | `./style_guide.md` | 代码风格规范 | 读取完整文件内容。首次执行时若不存在，调用 `style-resolver` skill 自动生成 |
-| `planning/specifications.md` | 实现规格 | 筛选非轻量的 `[新增|修改: 已定义]` 规格与 `[测试缺陷]` 标记的 `[新增|修改: 待修复]` 规格，提取 `Interface`、`Test Double`（如有）、`Test Cases`、`Change Type`、`Issues`。废弃与轻量规格跳过 |
-| `planning/tasks.md` | 任务列表 | 定位当前活跃 task（首个 `[DEFINED]`） |
+| `planning/specs.md` | 实现规格 | 筛选非轻量的 `[新增 | 修改: 已定义]` 规格与 `[测试缺陷]` 标记的 `[新增 | 修改: 待修复]` 规格，提取 `Interface`、`Test Double`（如有）、`Test Cases`、`Issues`（操作类型取自规格标题）。废弃与轻量规格跳过 |
+| `planning/plan.md` | 计划图 | 定位当前活跃工作项（首个「Depends On 全部 DONE」的 TODO/ACTIVE） |
 
 ### 状态过滤
 
@@ -132,7 +133,7 @@ Agent 生成测试时必须遵循以下纪律。这些规则确保测试在代�
 
 ### 处理顺序
 
-仅处理当前活跃 task 下的规格。按 `planning/specifications.md` 中该 task 的规格从上到下顺序依次处理。当前活跃 task = `planning/tasks.md` 中首个标题标记为 `[DEFINED]` 的任务。若不存在 DEFINED 任务，提醒用户先运行 `/specification-define`。
+仅处理当前活跃工作项下的规格。按 `planning/specs.md` 中该工作项的规格从上到下顺序依次处理。当前活跃工作项 = `planning/plan.md` 中首个「Depends On 全部 DONE」的 TODO/ACTIVE 工作项。若不存在可处理的工作项，提醒用户先运行 `/specify`（有 TODO 未展开时）或 `/plan`（工作项全空时）。
 
 ### 上游文档解析提示
 
@@ -205,6 +206,6 @@ Agent 生成测试时必须遵循以下纪律。这些规则确保测试在代�
 - RED 确认失败时不可继续，必须醒示用户排查
 - error 不允许确认 RED——必须先解决编译/加载/运行问题（可生成 stub 占位）后重试
 - 不允许跳过 RED 确认直接标记 `[新增|修改: 测试已生成]`
-- 仅受理 `[测试缺陷]` 类型的 `[新增|修改: 待修复]` 规格；`[实现缺陷]` / `[规格缺陷]` 不属于本命令，提醒用户按 AGENTS.md §失败路由协议 路由
+- 仅受理 `[测试缺陷]` 类型的 `[新增|修改: 待修复]` 规格；`[实现缺陷]` / `[规格缺陷]` 不属于本命令，提醒用户按 AGENTS.md §失败路由协议 路由（`[规格缺陷]` → `/specify`）
 - `[测试缺陷]` 修复只信规格，不参考现有实现；修复后不做 RED 重新确认
-- 修复中发现测试期望与规格矛盾时，改写 Issues 为 `[规格缺陷]` 并路由 `/specification-define`，不得擅自调整规格
+- 修复中发现测试期望与规格矛盾时，改写 Issues 为 `[规格缺陷]` 并路由 `/specify`，不得擅自调整规格

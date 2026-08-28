@@ -19,9 +19,8 @@ description: 协助用户进行系统级 bug 排查，基于代码、接口与�
 执行流程：
 
 0. 读取以下 planning 文档（如存在），作为分析背景：
-   - `planning/requirement.md`（项目目标与变更类型）
-   - `planning/architecture.md`（变更影响与设计决策）
-   - `planning/specifications.md`（当前规格与实现状态）
+   - `planning/plan.md`（项目目标、变更类型与计划图）
+   - `planning/specs.md`（当前规格与实现状态）
    如文件不存在则跳过，不影响后续流程
 1. 询问用户 bug 描述
 2. 收集信息：
@@ -42,6 +41,7 @@ description: 协助用户进行系统级 bug 排查，基于代码、接口与�
 ## 输入格式
 
 本命令通过对话交互收集信息。Agent 应主动询问并收集：
+
 - 问题描述（发生了什么）
 - 错误日志或控制台输出
 - 相关代码文件路径
@@ -70,7 +70,6 @@ description: 协助用户进行系统级 bug 排查，基于代码、接口与�
 ## 风险提示
 ...
 ```
-
 
 ## 调试策略
 

@@ -25,7 +25,7 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「状态机与记法规范」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。
 1. 读取 `planning/architecture.md`（如不存在，向用户汇报，禁止自行添加），获取其 `round`、`change_type`、`status`。若 `status` 为 `draft`，提醒用户「architecture.md 尚未确认（status: draft），建议先运行 architecture-design 完成确认」。
 2. 读取 `planning/tasks.md`（如不存在则允许新建）。若已存在，检查其 frontmatter `round` 是否与 architecture.md 一致——不一致则醒示「tasks.md 属于另一轮次（round: X vs Y），请先运行 `/progress-report` 归档旧内容或清空 `planning/` 后重试」
-3. 分析任务与架构的一致性，确保 task 的 `change_type` 与架构一致（可更具体，不可冲突）
+3. 继承 architecture.md 的 frontmatter `round` / `change_type`，分析任务与架构的一致性（变更覆盖、任务粒度与依赖排序）
 4. 生成差异修改提案
 5. 输出预览
 6. 确认后写入
@@ -51,6 +51,7 @@ description: 将架构设计拆解为可执行任务列表，支持新增/修改
 
 ```yaml
 round: <继承自 architecture.md>
+change_type: <继承自 architecture.md>
 ```
 
 版本历史由 git 承担，文档内不设 `version`/`created`/`updated`/`based_on` 字段。
@@ -62,11 +63,7 @@ round: <继承自 architecture.md>
 
 ## Task 1: <name> [TODO]
 
-- **Change Type**: feature | enhancement | refactor | bugfix | removal | chore | docs — 继承自架构，可进一步细化
 - **Depends On**: <task # or none> — 前置依赖任务编号，none 表示无依赖
-- **Specs**: （由 specification-define 填写，子列表格式，每行一条规格名称）
-           - `spec_name_1`
-           - `spec_name_2`
 - **Description**: 任务目标、上下文与预期产出
 
 ## Task 2: <name> [DEFINED]
@@ -76,7 +73,7 @@ round: <继承自 architecture.md>
 说明：
 
 - 标题标记只能为：[TODO] / [DEFINED] / [IMPLEMENTED]
-- `change_type` 继承自架构，可进一步细化：feature | enhancement | refactor | bugfix | removal | chore | docs
+- 本轮 `change_type` 单值，存于 frontmatter（继承自 architecture.md），task 节内不再重复
 - 不同 `change_type` 的 IMPLEMENTED 含义不同：
   - feature → 代码已新增
   - enhancement → 修改已完成
@@ -84,7 +81,6 @@ round: <继承自 architecture.md>
   - bugfix → 修复已完成
   - removal → 已解引用并移入 `_deprecated/`（物理删除由 progress-report 收尾统一执行）
   - chore / docs → 轻量实现完成（构建/类型检查通过，`[人工]` 条目落地并 PASS）
-- Specs 为子列表格式（`  - spec_name`），每行一条规格名称，由 specification-define 填写，code-review 据此遍历关联规格
 
 ## 输入来源
 
@@ -108,7 +104,7 @@ round: <继承自 architecture.md>
 
 - `planning/architecture.md` 的 `change_type` 位于文件顶部的 YAML frontmatter 中
 - `# Changes` 为表格格式，列 Change / Description / Dependencies。任务拆分按行序从上到下生成 task
-- `planning/tasks.md` 各任务以 `## Task N: <name> [STATUS]` 为标题，内含 `Change Type`、`Depends On`、`Specs` 字段
+- `planning/tasks.md` 的 frontmatter 含 `round`、`change_type`；各任务以 `## Task N: <name> [STATUS]` 为标题，内含 `Depends On`、`Description` 字段
 
 ## 输出
 
@@ -125,7 +121,7 @@ round: <继承自 architecture.md>
 ## 约束
 
 - 每个任务必须可独立执行
-- 每个任务必须明确 `change_type`
+- frontmatter 必须含 `change_type`（继承自 architecture.md）
 - 必须存在依赖关系（形成 DAG）
 - 不允许循环依赖
 - 必须映射到架构模块

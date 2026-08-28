@@ -15,16 +15,16 @@ description: 独立测试运行与验证器——执行测试并根据调用上�
 执行流程：
 
 0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「失败路由协议」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。
-1. 读取 `planning/specifications.md`，定位当前活跃 task（`planning/tasks.md` 中首个 `[DEFINED]` 的 task）
+1. 读取 `planning/specs.md`，定位当前活跃工作项（`planning/plan.md` 中首个「Depends On 全部 DONE」的 TODO/ACTIVE 工作项）
 2. 识别需要验证的规格——根据调用上下文和规格当前状态确定：
 
    | 调用上下文 | 目标规格状态 | 期望结果 | 通过后新状态 | 失败后新状态 |
-   |-----------|-------------|---------|------------|------------|
-   | test-generate（RED 确认） | `[新增|修改: 已定义]`（非轻量） | **FAIL** | —（仅确认 RED，不更新状态） | —（醒示 agent） |
-   | code-generate（GREEN 验证 — 新增/修改） | `[新增|修改: 已实现]`（非轻量） | **PASS** | `[新增|修改: 已测试]` | `[新增|修改: 待修复]` |
-   | code-generate（GREEN 验证 — 轻量） | `[新增|修改: 已实现]`（轻量） | **轻量验收清单 PASS** | `[新增|修改: 已测试]` | `[新增|修改: 待修复]` |
+   | ----------- | ------------- | --------- | ------------ | ------------ |
+   | test-generate（RED 确认） | `[新增\|修改: 已定义]`（非轻量） | **FAIL** | —（仅确认 RED，不更新状态） | —（醒示 agent） |
+   | code-generate（GREEN 验证 — 新增/修改） | `[新增\|修改: 已实现]`（非轻量） | **PASS** | `[新增\|修改: 已测试]` | `[新增\|修改: 待修复]` |
+   | code-generate（GREEN 验证 — 轻量） | `[新增\|修改: 已实现]`（轻量） | **轻量验收清单 PASS** | `[新增\|修改: 已测试]` | `[新增\|修改: 待修复]` |
    | code-generate（GREEN 验证 — 废弃） | `[废弃: 已解引用]` | **验证清单 PASS** | —（保持已解引用） | `[废弃: 待修复]` |
-   | code-review（影响范围回归） | 当前 task `[新增|修改: 已测试]`/`[废弃: 已解引用]` + 文件重叠的 `[新增|修改: 已验证]` 规格 | **PASS** | —（审查结果由 code-review 裁决） | —（醒示 code-review） |
+   | code-review（影响范围回归） | 当前工作项 `[新增\|修改: 已测试]`/`[废弃: 已解引用]` + 文件重叠的 `[新增\|修改: 已验证]` 规格 | **PASS** | —（审查结果由 code-review 裁决） | —（醒示 code-review） |
 
    **RED 确认规则**：RED 上下文（test-generate 调用）仅接受「断言失败」作为预期 FAIL。若失败结果全部为 error（测试无法编译/加载/运行），不确认 RED，醒示 agent「测试代码可能无法编译或运行（可能缺少 stub 占位），请检查后重试」，不更新规格状态。
 
@@ -44,7 +44,7 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 
 - **`[实现缺陷]`**（默认）：断言失败且断言期望与规格一致——实现违反契约。路由 `/code-generate`
 - **`[测试缺陷]`**：error 或断言失败的证据指向测试代码本身——测试引用了规格中不存在的字段/行为、断言期望与规格 `Interface` / `Test Cases` 文字矛盾、测试间相互污染等。路由 `/test-generate`。判定依据必须写入 Issues
-- **`[规格缺陷]`**：断言期望与测试代码一致，但与规格描述或更上层需求明显矛盾；或失败暴露规格定义不完整/自相冲突。路由 `/specification-define`
+- **`[规格缺陷]`**：断言期望与测试代码一致，但与规格描述或更上层需求明显矛盾；或失败暴露规格定义不完整/自相冲突。路由 `/specify`
 - 证据不足以区分时默认 `[实现缺陷]`，并在 Issues 中注明存疑点（如「疑似测试断言有误，请实现方复核」）
 
 ### 轻量规格的验收
@@ -68,7 +68,7 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 
 ### 失败处理细则
 
-#### 当 code-generate（GREEN 验证）FAIL 时：
+#### 当 code-generate（GREEN 验证）FAIL 时
 
 1. 将失败信息按失败路由协议写入 spec 的 `Issues` 字段：
    - 分类（`[实现缺陷]` / `[测试缺陷]` / `[规格缺陷]`）
@@ -77,10 +77,10 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
    - 失败用例名称
 2. 递增 `Retry Count`
 3. 状态更新为 `[新增|修改: 待修复]`（废弃为 `[废弃: 待修复]`）
-4. 按分类醒示用户下一步命令：`[实现缺陷]` → `/code-generate`；`[测试缺陷]` → `/test-generate`；`[规格缺陷]` → `/specification-define`
+4. 按分类醒示用户下一步命令：`[实现缺陷]` → `/code-generate`；`[测试缺陷]` → `/test-generate`；`[规格缺陷]` → `/specify`
 5. Retry Count ≥ 3 时额外醒示：「该规格已连续失败 3 次。必须按 AGENTS.md §失败路由协议 三选一路由（重新实现 / 修复测试 / 重定义规格），禁止盲目重试」
 
-#### 当 code-review（影响范围回归）FAIL 时：
+#### 当 code-review（影响范围回归）FAIL 时
 
 1. 不自动更新 spec 状态
 2. 按失败路由协议对失败规格给出分类建议，醒示 code-review 裁决（如「回归测试失败——重构可能引入了意外行为变更，请检查最近修改」）
@@ -88,6 +88,7 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 ### 废弃规格的特殊处理
 
 对于 `[废弃: 已解引用]` 状态的规格：
+
 - 调用来源为 code-generate（GREEN 验证）：
   - PASS → 保持 `[废弃: 已解引用]`，确认解引用与移动安全
   - FAIL → 状态更新为 `[废弃: 待修复]`，按失败路由协议分类写入 Issues（验证清单失败详情 + 受影响模块），递增 Retry Count
@@ -98,36 +99,36 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 ## 输入来源
 
 | 文件 | 用途 | 关键内容 |
-|------|------|---------|
-| `planning/specifications.md` | 实现规格 | 目标 spec 的 `Affected Files`（测试文件路径；废弃规格为引用方、目标代码原始路径与 `_deprecated/` 内文件路径）、`Test Cases`（含 `[人工]` 落地标记；轻量验收时核对）、`Issues`、`轻量` 标记 |
-| `planning/tasks.md` | 任务列表 | 定位当前活跃 task（首个 `[DEFINED]`） |
+| ------ | ------ | --------- |
+| `planning/specs.md` | 实现规格 | 目标 spec 的 `Affected Files`（测试文件路径；废弃规格为引用方、目标代码原始路径与 `_deprecated/` 内文件路径）、`Test Cases`（含 `[人工]` 落地标记；轻量验收时核对）、`Issues`、`轻量` 标记 |
+| `planning/plan.md` | 计划图 | 定位当前活跃工作项（首个「Depends On 全部 DONE」的 TODO/ACTIVE） |
 
 ### 执行模式与处理顺序
 
 按调用上下文确定执行范围：
 
 | 调用上下文 | 执行范围 |
-|-----------|---------|
-| test-generate（RED 确认） | 当前活跃 task 的目标 spec |
-| code-generate（GREEN 验证） | 当前活跃 task 的目标 spec |
-| code-review（影响范围回归） | 当前活跃 task 全部规格 + `Affected Files` 与当前 task 重叠的规格（含 `[新增|修改: 已验证]` 终态） |
-| progress-report（收尾全量回归） | `planning/specifications.md` 全部规格（含 `[新增|修改: 已验证]` 终态） |
+| ----------- | --------- |
+| test-generate（RED 确认） | 当前活跃工作项的目标 spec |
+| code-generate（GREEN 验证） | 当前活跃工作项的目标 spec |
+| code-review（影响范围回归） | 当前活跃工作项全部规格 + `Affected Files` 与当前工作项重叠的规格（含 `[新增\|修改: 已验证]` 终态） |
+| progress-report（收尾全量回归） | `planning/specs.md` 全部规格（含 `[新增\|修改: 已验证]` 终态） |
 
-执行范围内按 `planning/specifications.md` 中规格从上到下顺序依次验证。
+执行范围内按 `planning/specs.md` 中规格从上到下顺序依次验证。
 
 #### 影响范围回归算法
 
 用于 code-review（影响范围回归）上下文：
 
-1. 汇总当前活跃 task 全部规格的 `Affected Files`（含 code-review 重构新增的路径），去重
-2. 扫描 `planning/specifications.md` 中所有规格（含 `[新增|修改: 已验证]` 终态规格）的 `Affected Files`
+1. 汇总当前活跃工作项全部规格的 `Affected Files`（含 code-review 重构新增的路径），去重
+2. 扫描 `planning/specs.md` 中所有规格（含 `[新增|修改: 已验证]` 终态规格）的 `Affected Files`
 3. 筛选与步骤 1 集合存在任一路径重叠的规格，去重
 4. 对筛选结果中状态为 `[新增|修改: 已测试]`、`[废弃: 已解引用]` 或 `[新增|修改: 已验证]` 的规格依次执行测试（废弃规格执行验证清单，轻量规格执行轻量验收清单）；更早状态的规格（如 `[测试已生成]`——其测试按 RED 设计本应失败）只贡献 `Affected Files` 参与重叠分析，**不参与执行**
 5. 任一规格 FAIL → 整体回归 FAIL，报告失败详情与受影响规格清单
 
 #### 全量回归
 
-`planning/specifications.md` 中全部规格的测试（废弃为验证清单、轻量为轻量验收清单），由 `progress-report` 收尾硬门触发（见 progress-report「已完成状态」）。
+`planning/specs.md` 中全部规格的测试（废弃为验证清单、轻量为轻量验收清单），由 `progress-report` 收尾硬门触发（见 progress-report「已完成状态」）。
 
 ## 输出
 
@@ -145,7 +146,7 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 
 （废弃规格为验证清单结果：定向测试 / 全量构建 / grep 引用扫描，非单元测试统计）
 
-（code-review 影响范围回归时，表格列出当前 task 全部规格 + 文件重叠的已验证规格）
+（code-review 影响范围回归时，表格列出当前工作项全部规格 + 文件重叠的已验证规格）
 
 ## 失败详情
 
@@ -159,7 +160,7 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 ## 下一步
 
 - PASS → 提醒用户继续当前流程的下一步
-- FAIL → 按 Issues 分类提醒对应返工命令（/code-generate | /test-generate | /specification-define）
+- FAIL → 按 Issues 分类提醒对应返工命令（/code-generate | /test-generate | /specify）
 ```
 
 ## 约束
@@ -171,3 +172,4 @@ FAIL 写入 `Issues` 时，格式为 `[类型] <失败详情>`，类型按以下
 - RED 确认上下文仅接受「断言失败」为预期 FAIL；error 不得确认 RED，须先解决编译/加载/运行问题
 - 废弃与轻量规格验证失败时必须详细列出失败详情与受影响模块
 - 新增/修改规格仅执行 `[自动化]` 测试（Test Double 对 test-verify 透明）；废弃规格执行验证清单（定向测试 + 全量构建 + grep 引用扫描）；轻量规格执行轻量验收清单（构建 + 类型检查 + `[人工]` 落地核验）；均不涉及 `[人工]` 执行——`[人工]` 由用户在 code-generate 阶段执行并落地
+- FAIL 分类时先检查上游依赖是否变更（如上游 API 签名变更导致断言失败）——沿依赖边溯源后再分类，避免把上游缺陷误判为 `[实现缺陷]`

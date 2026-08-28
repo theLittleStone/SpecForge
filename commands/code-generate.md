@@ -12,6 +12,7 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 若 spec 声明了 Test Double，agent 需理解生产实现与 Test Double 共享同一 Interface，通过依赖注入切换。
 
 支持的操作类型：
+
 - **新增**：根据测试代码，创建新代码文件或添加新代码。若存在 Test Double，同时生成生产实现
 - **修改**：根据测试代码的回归保护，修改现有代码
 - **废弃**：按 `Depended By` 解引用后移入 `_deprecated/`（不直接删除），验证通过后由 progress-report 收尾统一物理删除
@@ -24,8 +25,8 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 执行流程：
 
 0. 检查项目根目录 `AGENTS.md` 已包含工作流共识（含「失败路由协议」与「人工验证落地规则」节）；若缺失，醒示用户先运行 `/setup` 初始化并终止。读取 `./style_guide.md`。如不存在，调用 `style-resolver` skill，从项目配置自动生成代码风格规范，经用户确认后写入，再继续后续流程
-1. 读取 `planning/specifications.md`
-2. 读取 `planning/requirement.md`，获取 `# Goal`、`# Scope` 作为背景上下文
+1. 读取 `planning/specs.md`
+2. 读取 `planning/plan.md`，获取 `# Goal`、`# Scope` 与该工作项的变更类型/描述/设计引用作为背景上下文
 3. 选择处理对象：
    - `[新增|修改: 测试已生成]`、`[废弃: 待删除]`、`[新增|修改|废弃: 待修复]`
    - 轻量 `[新增|修改: 已定义]` 规格（跳过测试生成，直接实现）
@@ -49,8 +50,7 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
       - **废弃**：按 `Spec` 与 `Depended By` 定位待删目标及其引用方，生成三步方案：
          1. **解引用**：修改 `Depended By` 中所有引用方，移除对目标代码的引用
          2. **移动**：将目标代码移入项目根目录 `_deprecated/`，并从构建/测试配置中排除（排除结果由用户人工确认）
-         3. **索引同步**：同步更新 `planning/architecture.md` 的 `# Dependency Index` 与规格 `Depended By` 字段，
-            移除已解引用的引用项，保持与代码一致
+         3. **引用同步**：同步更新 `planning/specs.md` 中相关规格的 `Depended By` 字段与 `planning/plan.md` 工作项的 `Affects`（以 grep 实际引用扫描为准），保持与代码一致
          若 `Spec` 未明确指定目标文件/函数，醒示用户确认操作对象，禁止自行搜索删除
       - **轻量**：按 `Spec` 与 `Interface`（如有）直接实现；无测试期望约束，以实现目标为准
 
@@ -87,7 +87,7 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
   4. 重新执行步骤 e/f（`[人工]` + `[自动化]` 验证）
   5. 全部 PASS 后清空 `Issues`，重置 `Retry Count`，状态更新为 `[新增|修改: 已测试]`（废弃规格保持 `[废弃: 已解引用]`）
 - **`[测试缺陷]`** → 不修改实现，醒示用户「测试代码需要修复，请运行 `/test-generate`」，停止
-- **`[规格缺陷]`** → 不修改实现，醒示用户「规格需要重新定义，请运行 `/specification-define`」，停止
+- **`[规格缺陷]`** → 不修改实现，醒示用户「规格需要重新定义，请运行 `/specify`」，停止
 
 分类可在举证且用户确认后调整：实现方发现失败根源不在实现时，提出分类变更建议，经用户确认后改写 `Issues` 类型并按新类型路由。
 
@@ -101,7 +101,7 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 
 ## 实现约束
 
-- 只允许实现 specifications.md 中当前状态的规格（新增/修改 `[新增|修改: 测试已生成]` / Issues 为 `[实现缺陷]` 的 `[新增|修改: 待修复]`；轻量 `[新增|修改: 已定义]`；废弃 `[废弃: 待删除]` / `[废弃: 待修复]`）
+- 只允许实现 specs.md 中当前状态的规格（新增/修改 `[新增|修改: 测试已生成]` / Issues 为 `[实现缺陷]` 的 `[新增|修改: 待修复]`；轻量 `[新增|修改: 已定义]`；废弃 `[废弃: 待删除]` / `[废弃: 待修复]`）
 - 不允许新增未定义规格
 - 必须严格遵循 spec 的 `Interface` 字段（公共接口契约）；轻量规格以 `Spec` 目标为准
 - 必须使该 spec 的 `[自动化]` 测试全部通过，并引导用户完成 `[人工]` 测试且结果落地
@@ -123,8 +123,8 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 | 文件 | 用途 | 关键内容 |
 |------|------|---------|
 | `./style_guide.md` | 代码风格规范 | 读取完整文件内容。首次执行时若不存在，调用 `style-resolver` skill 自动生成 |
-| `planning/specifications.md` | 实现规格 | 筛选 `[新增|修改: 测试已生成]`、轻量 `[新增|修改: 已定义]`、`[废弃: 待删除]`、`[新增|修改|废弃: 待修复]` 状态的规格。提取 `Interface`、`Spec`、`Test Double`（如有）、`Test Cases`、`Affected Files`、`轻量`、`Depended By`（废弃规格）。`[新增|修改|废弃: 待修复]` 时额外读取 `Issues`（含分类）、`Retry Count` |
-| `planning/requirement.md` | 需求背景 | `# Goal`、`# Scope` 章节，作为代码实现的上下文参考 |
+| `planning/specs.md` | 实现规格 | 筛选 `[新增|修改: 测试已生成]`、轻量`[新增|修改: 已定义]`、`[废弃: 待删除]`、`[新增|修改|废弃: 待修复]` 状态的规格。提取 `Interface`、`Spec`、`Test Double`（如有）、`Test Cases`、`Affected Files`、`轻量`、`Depended By`（废弃规格）。`[新增|修改|废弃: 待修复]` 时额外读取 `Issues`（含分类）、`Retry Count` |
+| `planning/plan.md` | 需求背景 + 计划图 | `# Goal`、`# Scope`、`# Constraints` 章节，以及当前工作项的变更类型、描述、设计引用、失败路由（含覆盖声明），作为代码实现的上下文参考 |
 
 ### 状态过滤
 
@@ -134,16 +134,16 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 
 ### 处理顺序
 
-仅处理当前活跃 task 下的规格。按 `planning/specifications.md` 中该 task 的规格从上到下顺序依次处理。
+仅处理当前活跃工作项下的规格。按 `planning/specs.md` 中该工作项的规格从上到下顺序依次处理。
 
 **垂直切片模式**：每个 spec 完整走完「读测试 → 解释逻辑 → 实现 → `[人工]` 验证（含落地）→ `/test-verify` 验证」后，再处理下一个 spec。任一 spec 验证 FAIL 时立即停止，不继续后续 spec。
 
-当前活跃 task = `planning/tasks.md` 中首个标题标记为 `[DEFINED]` 的任务。若不存在 DEFINED 任务，提醒用户先运行 `/specification-define`。
+当前活跃工作项 = `planning/plan.md` 中首个「Depends On 全部 DONE」的 TODO/ACTIVE 工作项。若不存在可处理的工作项，提醒用户先运行 `/specify`（有 TODO 未展开时）或 `/plan`（工作项全空时）。
 
 ### 上游文档解析提示
 
 - 规格的 `Interface` 为函数签名/API 端点/类型定义，是实现的精确契约；轻量规格可无此字段
-- 规格的 `Test Double` 字段（如有）由 specification-define 定义，test-generate 生成其实现代码。code-generate 据此生成生产实现（二者共享 Interface）
+- 规格的 `Test Double` 字段（如有）由 specify 定义，test-generate 生成其实现代码。code-generate 据此生成生产实现（二者共享 Interface）
 - 规格的 `Test Cases` 为行为验证场景列表，agent 需读取测试代码对照 `[自动化]` 条目；`[人工]` 条目在步骤 e 引导用户执行并回写结果
 - `Issues` 字段格式为 `[实现缺陷|测试缺陷|规格缺陷] <详情>`，决定待修复规格的处理分流
 - 规格状态标记位于章节标题：`## [新增: 测试已生成] name`、`## [修改: 测试已生成] name`
@@ -188,12 +188,12 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 ## 下一步
 
 - 所有 spec 实现完成（新增/修改状态 `[新增|修改: 已测试]`，废弃状态 `[废弃: 已解引用]`）→ 提醒用户运行 `/code-review`
-- 存在 `[新增|修改|废弃: 待修复]` → 按 Issues 分类提醒下一步：`[实现缺陷]` 重新运行 `/code-generate`；`[测试缺陷]` 运行 `/test-generate`；`[规格缺陷]` 运行 `/specification-define`
+- 存在 `[新增|修改|废弃: 待修复]` → 按 Issues 分类提醒下一步：`[实现缺陷]` 重新运行 `/code-generate`；`[测试缺陷]` 运行 `/test-generate`；`[规格缺陷]` 运行 `/specify`
 
 ## 约束
 
 - 不允许跨规格实现
-- 不允许跳过依赖规格
+- 不允许跳过依赖工作项（Depends On 未 DONE 的工作项不得实现）
 - 不允许生成伪代码
 - 常规规格不允许在未读测试代码的情况下生成实现
 - 任何 spec FAIL 时立即停止，不自动重试，不处理后续 spec
@@ -204,3 +204,4 @@ description: TDD 绿阶段——读取测试代码理解行为期望，生成实
 - `[人工]` 测试 ALL PASS 且结果已回写 specs.md 后才可进入 `/test-verify`
 - `[人工]` 测试 FAIL 时不可跳过，必须按失败路由协议分类标记 `[新增|修改|废弃: 待修复]` 并停止
 - 永不修改测试代码；测试问题一律分类路由 `/test-generate`
+- `[规格缺陷]` 一律路由 `/specify`，不得自行修改规格
