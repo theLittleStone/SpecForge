@@ -1,6 +1,6 @@
 # SpecForge
 
-**面向 AI 编程 agent 的规格驱动 TDD 工作流框架**
+**面向 AI 编程 agent 的规格驱动 TDD 工作流框架。**
 
 [License: Apache-2.0] [Platform: OpenCode]
 
@@ -222,8 +222,6 @@ cp -r commands/ skills/ ~/.config/opencode/
 
 | 命令 | 说明 |
 | ------ | ------ |
-| `/deep-debug` | 基于假设驱动分析代码、接口与测试的系统级问题排查（可作 L1 Debug 工具） |
-| `/explain-to-me` | 综合本地代码与网络信息解释代码、架构或技术概念 |
 | `/setup` | 初始化项目 `AGENTS.md`，写入流水线全局行为约束与 8 节工作流共识（交互协议 / 安全基线 / 执行约束 / 状态机与记法规范 / 失败路由协议 / 统一失效协议 / 人工验证落地规则 / 轻量 spec 规则）。OpenCode 自动注入每个会话；命令引用它而不重复 |
 
 ---
@@ -234,7 +232,7 @@ SpecForge 附带两个 opencode skill，流水线按需调用：
 
 ### knowledge-augment
 
-用简洁示例与常见陷阱补足编程语言、框架与库的知识盲区。按需调用——deep-debug / explain-to-me 显式引用，AGENTS.md 安全基线允许任何命令调用。
+用简洁示例与常见陷阱补足编程语言、框架与库的知识盲区。按需调用——AGENTS.md 安全基线允许任何命令调用；`/execute` 的 L1 Debug 报告流程排查根因时使用它解释机制。
 
 ### style-resolver
 
@@ -251,9 +249,8 @@ commands/               # 流水线命令定义（Markdown + YAML frontmatter）
   execute.md            # 执行：T/C 交叉循环（auto | step）
   progress-report.md    # 收尾 & 归档（+ 执行证据）
   setup.md              # AGENTS.md 共识初始化器
-  deep-debug.md         # 辅助：假设驱动排障
-  explain-to-me.md      # 辅助：解释代码/架构
-  _deprecated/          # 退役命令（4 个旧规划命令 + 4 个旧执行命令），保留供参考
+  _deprecated/          # 退役命令（4 个旧规划命令 + 4 个旧执行命令 + 2 个旧辅助命令），
+                        # 保留供参考
 skills/                 # Agent 辅助 skills
   knowledge-augment/
     SKILL.md

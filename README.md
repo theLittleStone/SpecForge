@@ -1,6 +1,6 @@
 # SpecForge
 
-**A specification-driven TDD workflow framework for AI coding agents**
+**A specification-driven TDD workflow framework for AI coding agents.**
 
 [License: Apache-2.0] [Platform: OpenCode]
 
@@ -222,8 +222,6 @@ After installation, run `/setup` in the target project to initialize `AGENTS.md`
 
 | Command | Description |
 | --------- | ------------- |
-| `/deep-debug` | System-level bug investigation using hypothesis-driven analysis of code, interfaces, and tests (usable as the L1 debug tool) |
-| `/explain-to-me` | Explain code, architecture, or technical concepts by synthesizing local code with web information |
 | `/setup` | Initialize project `AGENTS.md` with pipeline-wide behavior constraints and the 8-section workflow consensus (interaction protocol / safety baseline / execution constraints / state machine & notation / failure routing protocol / unified invalidation protocol / manual-landing rule / lightweight spec rule). OpenCode auto-injects it into every session; commands reference it instead of duplicating |
 
 ---
@@ -234,7 +232,7 @@ SpecForge ships with two opencode skills that the pipeline invokes on demand:
 
 ### knowledge-augment
 
-Fills knowledge gaps about programming languages, frameworks, and libraries with concise examples and common pitfalls. Invoked on demand — explicitly referenced by deep-debug / explain-to-me, and the AGENTS.md safety baseline lets any command call it.
+Fills knowledge gaps about programming languages, frameworks, and libraries with concise examples and common pitfalls. Invoked on demand — the AGENTS.md safety baseline lets any command call it, and the L1 debug report flow in `/execute` uses it for root-cause mechanism explanation.
 
 ### style-resolver
 
@@ -251,9 +249,7 @@ commands/               # Pipeline command definitions (Markdown + YAML frontmat
   execute.md            # Execution: T/C cross-verification loop (auto | step)
   progress-report.md    # Closeout & archival (+ execution evidence)
   setup.md              # AGENTS.md consensus initializer
-  deep-debug.md         # Auxiliary: hypothesis-driven debugging
-  explain-to-me.md      # Auxiliary: explain code/architecture
-  _deprecated/          # Retired commands (4 old planning + 4 old execution commands),
+  _deprecated/          # Retired commands (4 old planning + 4 old execution + 2 old auxiliary),
                         # kept for reference
 skills/                 # Agent auxiliary skills
   knowledge-augment/
