@@ -226,20 +226,6 @@ cp -r commands/ skills/ ~/.config/opencode/
 
 ---
 
-## 内置 Skills
-
-SpecForge 附带两个 opencode skill，流水线按需调用：
-
-### knowledge-augment
-
-用简洁示例与常见陷阱补足编程语言、框架与库的知识盲区。按需调用——AGENTS.md 安全基线允许任何命令调用；`/execute` 的 L1 Debug 报告流程排查根因时使用它解释机制。
-
-### style-resolver
-
-自动检测项目语言与框架，基于既有代码约定或社区标准生成 `style_guide.md`。`/execute` 在 `style_guide.md` 缺失时调用（T 视角写测试、C 视角写实现均遵循），确保代码风格一致。
-
----
-
 ## 项目结构
 
 ```text
@@ -249,14 +235,8 @@ commands/               # 流水线命令定义（Markdown + YAML frontmatter）
   execute.md            # 执行：T/C 交叉循环（auto | step）
   progress-report.md    # 收尾 & 归档（+ 执行证据）
   setup.md              # AGENTS.md 共识初始化器
-  _deprecated/          # 退役命令（4 个旧规划命令 + 4 个旧执行命令 + 2 个旧辅助命令），
-                        # 保留供参考
-skills/                 # Agent 辅助 skills
-  knowledge-augment/
-    SKILL.md
-  style-resolver/
-    SKILL.md
-    style-guide-example.md
+  _deprecated/          # 退役制品：10 个旧命令 + 2 个旧 skill
+                        # （knowledge-augment、style-resolver），保留供参考
 ```
 
 ---

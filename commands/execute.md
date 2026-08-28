@@ -48,7 +48,10 @@ description: 执行命令——以 T/C 双视角交叉循环处理当前活跃�
 
 ### T 视角：写测试（RED）
 
-1. 读取规格（Spec / Interface / Test Double / Test Cases）+ `style_guide.md`（缺失时调 style-resolver 生成；轻量/废弃规格跳过）
+1. 读取规格（Spec / Interface / Test Double / Test Cases）+ `style_guide.md`（缺失时按下述规则直接生成 `./style_guide.md`；轻量/废弃规格跳过）
+   - 风格探测：glob 扫描源文件扩展名识别语言（不确定问用户）→ 有代码则读 3 个源码文件提取缩进/命名/引号约定 → 无代码则采用该语言社区标准
+   - 结构：Source / Formatting / Quotes / Naming / Imports / Functions / Error Handling / Comments / Testing / Git Commits 各节，每条规则标注来源（`from code:文件:行` / `from config` / `from convention` / `from user`）
+   - 无法确定时明说并问用户，禁止发明约定
 2. 依据 Test Cases 撰写测试：
    - `[自动化]` 条目按双轨落地——**F2P**（问题验证，断言新行为，基态必须 FAIL）/ **P2P**（回归保护，断言既有行为，基态必须 PASS）；每非轻量规格至少 1 个 F2P 自动化测试
    - 引用符号必须已在 Interface 段定义（禁止引用未定义符号）

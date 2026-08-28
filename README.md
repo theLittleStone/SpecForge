@@ -226,20 +226,6 @@ After installation, run `/setup` in the target project to initialize `AGENTS.md`
 
 ---
 
-## Built-in Skills
-
-SpecForge ships with two opencode skills that the pipeline invokes on demand:
-
-### knowledge-augment
-
-Fills knowledge gaps about programming languages, frameworks, and libraries with concise examples and common pitfalls. Invoked on demand — the AGENTS.md safety baseline lets any command call it, and the L1 debug report flow in `/execute` uses it for root-cause mechanism explanation.
-
-### style-resolver
-
-Auto-detects the project's language and framework, then generates `style_guide.md` based on existing code conventions or community standards. Invoked by `/execute` when `style_guide.md` is missing (the T view generates test code, the C view implements — both follow it) to ensure consistent code style.
-
----
-
 ## Project Structure
 
 ```text
@@ -249,14 +235,8 @@ commands/               # Pipeline command definitions (Markdown + YAML frontmat
   execute.md            # Execution: T/C cross-verification loop (auto | step)
   progress-report.md    # Closeout & archival (+ execution evidence)
   setup.md              # AGENTS.md consensus initializer
-  _deprecated/          # Retired commands (4 old planning + 4 old execution + 2 old auxiliary),
-                        # kept for reference
-skills/                 # Agent auxiliary skills
-  knowledge-augment/
-    SKILL.md
-  style-resolver/
-    SKILL.md
-    style-guide-example.md
+  _deprecated/          # Retired artifacts: 10 old commands + 2 old skills
+                        # (knowledge-augment, style-resolver), kept for reference
 ```
 
 ---

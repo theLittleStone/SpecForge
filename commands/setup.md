@@ -34,7 +34,7 @@ OpenCode 启动时自动读取工作目录下的该文件并注入每个会话�
 
 ## 安全基线
 - 不编造需求、规格或 API 用法。不确定时搜代码库或问用户。
-- 知识盲区用 grep/glob/websearch，必要时调 knowledge-augment 或 style-resolver。
+- 知识盲区用 grep/glob/websearch 补足；若仍不确定，明说「不知道」而非猜测或发明 API。
 
 ## 执行约束
 - 一次只处理一个工作项。活跃工作项 = plan.md 中首个「Depends On 全部 DONE」的 TODO/ACTIVE 工作项。
