@@ -95,11 +95,11 @@ Each implementation is an explicit hypothesis. Every attempt is recorded in the 
 
 Total implementation attempts ≤ 4. `[测试缺陷]` rework is capped at 2 (the 3rd routes to `/specify` — repeated test failure suggests spec ambiguity) and never consumes the implementation budget. **Oscillation detection**: two consecutive identical diagnoses skip L2 and jump straight to L3. Failures are classified **after checking upstream dependencies** — the surface failure point may not be the root cause.
 
-### 8-State Spec Machine
+### 9-State Spec Machine
 
 Each spec flows through a strict state machine using the `[Operation: State]` format — the **inter-agent contract language**: each view reads a spec's state to decide what to do, and states are advanced only by the view that owns them. Retry counters and budget positions live in the **Attempt Log**, not in the state machine.
 
-Normal track: `[新增|修改: 已定义]` → `[测试中]` → `[测试已验收]` → `[实现中]` → `[已验收]` → `[已验证]` (terminal); the rework state `[待修复]` loops back via the failure routing protocol. Deprecation track: `[废弃: 待删除]` → `[已解引用]` → `[已删除]` (terminal). The canonical table — including who sets each state — lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation).
+Normal track: `[新增|修改: 已定义]` → `[测试中]` → `[测试已验收]` → `[实现中]` → `[已验收]` → `[已验证]` (terminal); the rework state `[待修复]` loops back via the failure routing protocol. Deprecation track: `[废弃: 待删除]` → `[已解引用]` → `[已删除]` (terminal). Nine semantic states — the canonical table in AGENTS.md expands them by operation type into 11 rows (7 regular-track + 4 deprecation-track; `已定义` and `待修复` are shared across tracks). The canonical table — including who sets each state — lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation).
 
 Removal is behavior reduction, not test-first work: `/specify` records the removal target and its `Depended By` (real `grep` scan) and writes a verification checklist (targeted tests / full build / grep scan) into `Test Cases`; `/execute` skips test writing, the C view de-references and moves the code into `_deprecated/`, then runs the checklist; `progress-report` physically deletes `_deprecated/` and sets `[废弃: 已删除]`.
 
