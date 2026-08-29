@@ -1,4 +1,4 @@
-# SpecForge
+# SpecCaliber
 
 **A specification-driven TDD workflow framework for AI coding agents.**
 
@@ -8,17 +8,17 @@
 
 ---
 
-## What is SpecForge?
+## What is SpecCaliber?
 
-SpecForge is a **specification-driven TDD pipeline** built for AI coding agents (specifically [opencode](https://opencode.ai)). It transforms natural language requirements into a **plan graph** of work items, expands each work item into a precise implementation spec just before execution, then drives execution through a **two-role adversarial loop** — a Test agent (T) and a Code agent (C) that distrust each other and cross-verify every artifact, with the user as final judge.
+SpecCaliber is a **specification-driven TDD pipeline** built for AI coding agents (specifically [opencode](https://opencode.ai)). It transforms natural language requirements into a **plan graph** of work items, expands each work item into a precise implementation spec just before execution, then drives execution through a **two-role adversarial loop** — a Test agent (T) and a Code agent (C) that distrust each other and cross-verify every artifact, with the user as final judge.
 
-Instead of letting a single AI agent design, code, and grade itself, SpecForge separates the workflow into two opposing roles: the **T view** writes tests and forces them RED, then verifies and audits the implementation (GREEN); the **C view** reproduces RED and audits the tests, then implements against them. Every artifact is accepted by the **opposite side** — no independent reviewer, no self-grading. Failures are classified by the opposite side and routed through a **dynamic budget** (L0–L3); rework follows the **unified invalidation protocol** shared with the planning phase instead of whole-round rollback.
+Instead of letting a single AI agent design, code, and grade itself, SpecCaliber separates the workflow into two opposing roles: the **T view** writes tests and forces them RED, then verifies and audits the implementation (GREEN); the **C view** reproduces RED and audits the tests, then implements against them. Every artifact is accepted by the **opposite side** — no independent reviewer, no self-grading. Failures are classified by the opposite side and routed through a **dynamic budget** (L0–L3); rework follows the **unified invalidation protocol** shared with the planning phase instead of whole-round rollback.
 
 ---
 
 ## Design Philosophy
 
-SpecForge guarantees quality through **separation, not trust**, built on three structural principles:
+SpecCaliber guarantees quality through **separation, not trust**, built on three structural principles:
 
 1. **Files as agent context isolation** — Each planning artifact is the primary working context of a **separate agent conversation**, self-contained enough that a conversation only needs to read the documents it needs and write its own output. No agent carries the entire pipeline context. Planning-side codebase exploration can additionally be delegated to an isolated read-only **explorer subagent** (`agents/explorer.md`): only the distilled evidence summary (facts with `file:line` + insights + unconfirmed items) crosses the boundary — raw exploration output never enters the planner's context.
 
@@ -171,7 +171,7 @@ When a round completes, `wrap-up` first enforces hard acceptance gates — L4 fu
 
 ```bash
 # Clone into the opencode config directory
-git clone https://github.com/theLittleStone/SpecForge.git ~/.config/opencode/
+git clone https://github.com/theLittleStone/SpecCaliber.git ~/.config/opencode/
 
 # Or copy commands + agents
 cp -r commands/ agents/ ~/.config/opencode/

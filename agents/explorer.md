@@ -1,5 +1,5 @@
 ---
-description: SpecForge /plan 阶段只读代码探索子 agent——接收规划 agent 传入的探索 brief，返回结构化证据摘要
+description: SpecCaliber /plan 阶段只读代码探索子 agent——接收规划 agent 传入的探索 brief，返回结构化证据摘要
 mode: subagent
 permission:
   edit: deny        # 禁用 write / edit / apply_patch 全部写工具

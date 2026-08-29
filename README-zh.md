@@ -1,4 +1,4 @@
-# SpecForge
+# SpecCaliber
 
 **面向 AI 编程 agent 的规格驱动 TDD 工作流框架。**
 
@@ -10,7 +10,7 @@
 
 ## 简介
 
-SpecForge 是一套为 AI 编程 agent（[opencode](https://opencode.ai)）设计的**规格驱动 TDD 软件工程流水线**。它将自然语言需求转化为一张**计划图**（工作项为节点），在每个工作项即将执行前把它展开为精确的实现规格，再由 **T（测试）/ C（实现）双视角对抗循环**推进执行——双方互不信任、产物互验，用户担任最终裁判。
+SpecCaliber 是一套为 AI 编程 agent（[opencode](https://opencode.ai)）设计的**规格驱动 TDD 软件工程流水线**。它将自然语言需求转化为一张**计划图**（工作项为节点），在每个工作项即将执行前把它展开为精确的实现规格，再由 **T（测试）/ C（实现）双视角对抗循环**推进执行——双方互不信任、产物互验，用户担任最终裁判。
 
 **核心理念**：不让单个 AI agent 既设计、编码又自审自判，而是把执行拆为两个对立的视角——**T 视角**写测试并强制 RED，再验证与审查实现（GREEN）；**C 视角**复现 RED 并审查测试，再据此实现。每一份产物都由**对侧**验收——没有独立审查者，也没有自我评价。失败由对侧判定并按三类 Issues 分类，经**动态预算**（L0-L3）路由；返工遵循与规划阶段共用的**统一失效协议**（而非整轮回滚）。
 
@@ -18,7 +18,7 @@ SpecForge 是一套为 AI 编程 agent（[opencode](https://opencode.ai)）设�
 
 ## 设计理念
 
-SpecForge 通过「**分离而非信任**」保证质量，建立在三条结构性原则之上：
+SpecCaliber 通过「**分离而非信任**」保证质量，建立在三条结构性原则之上：
 
 1. **文件 = agent 上下文隔离** — 每个规划产物是**独立 agent 对话**的主要工作上下文，自包含到「单次对话只读自己需要的文档、写自己的输出」即可独立工作；没有哪个 agent 需要背负整条流水线的上下文。规划侧的代码探索还可委托给隔离的只读 **explorer 子 agent**（`agents/explorer.md`）：只有蒸馏后的证据摘要（事实 + file:line 引用 + 可行动洞察 + 未确认项）跨边界返回，原始探索输出永远不进入规划 agent 的上下文。
 
@@ -171,7 +171,7 @@ flowchart TD
 
 ```bash
 # 克隆到 opencode 配置目录
-git clone https://github.com/theLittleStone/SpecForge.git ~/.config/opencode/
+git clone https://github.com/theLittleStone/SpecCaliber.git ~/.config/opencode/
 
 # 或复制 commands + agents
 cp -r commands/ agents/ ~/.config/opencode/
