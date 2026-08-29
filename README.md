@@ -51,7 +51,7 @@ flowchart TD
     EXEC --> LOOP
     LOOP -->|"all specs terminal"| DONE["Cross-spec check (C self-check + T review)<br/>→ work-item summary → user confirms DONE"]
 
-    DONE --> REPORT["/progress-report<br/>L4 full regression + evidence + archive"]
+    DONE --> REPORT["/wrap-up<br/>L4 full regression + evidence + archive"]
 
     FAIL["Failure: opposite-side judgment<br/>three-class Issues → dynamic budget L0-L3"]
     LOOP -.-> FAIL
@@ -66,7 +66,7 @@ flowchart TD
 
 2. **Execution (T/C cross-verification loop)** — `/execute` processes exactly one work item: each spec runs the T → C → T cycle. T writes tests (self-confirming RED), C reproduces RED and audits the tests, C implements (hypothesis-driven, recorded in the Attempt Log), T verifies GREEN and audits the implementation. Verification is layered L1–L5 with depth derived from the change type. Failures are judged by the opposite side, classified into three classes, and routed through a **dynamic budget** (L0 → L1 debug report → L2 multi-candidate → L3 forced routing). When all specs reach terminal state, the work item is closed via a cross-spec check and **user confirmation** before marking DONE.
 
-3. **Closeout** — `progress-report` enforces hard acceptance gates (L4 full regression, Goal traceability, closed unresolved questions), aggregates **execution evidence** (attempts / verification rounds / disputes / PTS phase summaries / F2P-P2P pass rates), then archives the round.
+3. **Closeout** — `wrap-up` enforces hard acceptance gates (L4 full regression, Goal traceability, closed unresolved questions), aggregates **execution evidence** (attempts / verification rounds / disputes / PTS phase summaries / F2P-P2P pass rates), then archives the round.
 
 Non-behavioral changes (chore / docs) take the **lightweight spec** path: RED is skipped and the spec is implemented directly inside `/execute` (C view) then accepted via the lightweight checklist (T view). Rework is driven by the **failure routing protocol** — three-class Issues (`[实现缺陷]` / `[测试缺陷]` / `[规格缺陷]`) judged by the opposite side and routed to the **right recovery target** rather than re-running the whole chain; rollback follows the **unified invalidation protocol** shared with the planning phase.
 
@@ -101,7 +101,7 @@ Each spec flows through a strict state machine using the `[Operation: State]` fo
 
 Normal track: `[新增|修改: 已定义]` → `[测试中]` → `[测试已验收]` → `[实现中]` → `[已验收]` → `[已验证]` (terminal); the rework state `[待修复]` loops back via the failure routing protocol. Deprecation track: `[废弃: 待删除]` → `[已解引用]` → `[已删除]` (terminal). Nine semantic states — the canonical table in AGENTS.md expands them by operation type into 11 rows (7 regular-track + 4 deprecation-track; `已定义` and `待修复` are shared across tracks). The canonical table — including who sets each state — lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation).
 
-Removal is behavior reduction, not test-first work: `/specify` records the removal target and its `Depended By` (real `grep` scan) and writes a verification checklist (targeted tests / full build / grep scan) into `Test Cases`; `/execute` skips test writing, the C view de-references and moves the code into `_deprecated/`, then runs the checklist; `progress-report` physically deletes `_deprecated/` and sets `[废弃: 已删除]`.
+Removal is behavior reduction, not test-first work: `/specify` records the removal target and its `Depended By` (real `grep` scan) and writes a verification checklist (targeted tests / full build / grep scan) into `Test Cases`; `/execute` skips test writing, the C view de-references and moves the code into `_deprecated/`, then runs the checklist; `wrap-up` physically deletes `_deprecated/` and sets `[废弃: 已删除]`.
 
 Work items carry a coarse three-state marker in plan.md: `TODO` (not yet expanded) → `ACTIVE` (spec defined or executing) → `DONE` (all specs terminal); details live in the spec state machine. The canonical table lives in the `AGENTS.md` written by `/setup` (§ State Machine & Notation); each command's state-filter rules live in its own command file. The pipe shorthand `[新增|修改: x]` is allowed inside command files but the full `[OperationType: State]` form is mandatory when writing into planning/ documents.
 
@@ -114,7 +114,7 @@ Verification depth is derived deterministically from the change type (plan.md §
 | L1 | Spec tests (F2P + P2P) | GREEN acceptance (T view) |
 | L2 | Related-file tests (existing tests in `Affected Files`) | Auto-run after `[已验收]` |
 | L3 | Impact-scope regression (work-item `Affects` + dependency chain) | After the last spec of the work item |
-| L4 | Full regression | `progress-report` closeout |
+| L4 | Full regression | `wrap-up` closeout |
 | L5 | Behavioral sanity (`[人工]` items + cross review) | User-guided, results written back |
 
 Internal implementation → L1-2; API signature / data structure change → L1-3; pure addition → L1-2; pure removal → L1-3 (incl. grep scan); docs/config → lightweight L1. Test Cases carry a dual-track role annotation: **F2P** (problem verification — must fail on baseline) / **P2P** (regression protection — must pass on baseline); every non-lightweight spec requires at least one `[自动化] F2P` test.
@@ -160,7 +160,7 @@ Instead of a maintained module index, work items carry a change type from a smal
 
 ### Cross-Round Archival
 
-When a round completes, `progress-report` first enforces hard acceptance gates — L4 full regression PASS, `# Goal` traceability confirmed, and all unresolved questions closed. It then aggregates per-work-item **execution evidence** (attempt counts, verification rounds, dispute counts, PTS phase summaries, and F2P/P2P pass rates split by track) to locate the weakest sub-process for the next round, physically deletes `_deprecated/`, auto-generates a summary (incl. Goal traceability + execution evidence), archives all planning files to `planning/archive/`, appends an entry to `changelist.md`, and preserves historical context for the next round. (`style_guide.md` stays in the project root for reuse across rounds; it is not archived.)
+When a round completes, `wrap-up` first enforces hard acceptance gates — L4 full regression PASS, `# Goal` traceability confirmed, and all unresolved questions closed. It then aggregates per-work-item **execution evidence** (attempt counts, verification rounds, dispute counts, PTS phase summaries, and F2P/P2P pass rates split by track) to locate the weakest sub-process for the next round, physically deletes `_deprecated/`, auto-generates a summary (incl. Goal traceability + execution evidence), archives all planning files to `planning/archive/`, appends an entry to `changelist.md`, and preserves historical context for the next round. (`style_guide.md` stays in the project root for reuse across rounds; it is not archived.)
 
 ---
 
@@ -185,7 +185,7 @@ After installation, run `/setup` in the target project to initialize `AGENTS.md`
 | `/plan` | Planning | Socratic dialogue (why / assumptions / alternatives / boundaries) → codebase exploration → complexity assessment (`minimal`/`task`/`full`) → plan graph with work items, dependencies, failure routes, verification depth, design nodes (full complexity), deferred work and negative evidence. Also revises existing plans via change classification + impact rules + unified invalidation. Produces `planning/plan.md` |
 | `/specify` | Planning | Expands the active work item (first `TODO` whose dependencies are all `DONE`) into a spec contract: Spec / Interface / Test Double / Test Cases (F2P/P2P dual-track) / upstream change causality (optional); splits oversized work items back into the graph (runtime decomposition); handles `[规格缺陷]` redefinition (single spec + Interface dependents invalidated). Produces `planning/specs.md` |
 | `/execute` | **Execution** | The single execution entry: processes exactly one work item via the T/C cross-verification loop (auto / step modes). T writes tests (RED) → C reproduces RED + audits tests → C implements (hypothesis → Attempt Log) → T verifies GREEN + audits implementation → layered verification L2/L3 → `[人工]` items → cross-spec check → work-item summary → user confirms DONE. Failure handling: opposite-side judgment + three-class Issues + dynamic budget L0-L3 + oscillation/stagnation guards |
-| `/progress-report` | Close | Gate on L4 full regression + Goal traceability + closed unresolved questions, aggregate execution evidence (attempts / verification rounds / disputes / PTS / F2P-P2P rates), then physically delete `_deprecated/` (setting `[废弃: 已删除]`), archive to `planning/archive/`, append to `changelist.md` |
+| `/wrap-up` | Close | Gate on L4 full regression + Goal traceability + closed unresolved questions, aggregate execution evidence (attempts / verification rounds / disputes / PTS / F2P-P2P rates), then physically delete `_deprecated/` (setting `[废弃: 已删除]`), archive to `planning/archive/`, append to `changelist.md` |
 
 ---
 
@@ -204,7 +204,7 @@ commands/               # Pipeline command definitions (Markdown + YAML frontmat
   plan.md               # Planning: dialogue → explore → assess → plan graph / revise
   specify.md            # Planning: lazy spec expansion + [规格缺陷] redefinition
   execute.md            # Execution: T/C cross-verification loop (auto | step)
-  progress-report.md    # Closeout & archival (+ execution evidence)
+  wrap-up.md            # Closeout & archival (+ execution evidence)
   setup.md              # AGENTS.md consensus initializer
   _deprecated/          # Retired artifacts: 10 old commands + 2 old skills
                         # (knowledge-augment, style-resolver), kept for reference

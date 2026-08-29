@@ -58,7 +58,7 @@ description: 规格化命令——将活跃工作项按需展开为规格契约�
 仅处理当前活跃工作项（`planning/plan.md` 中首个「Depends On 全部 DONE」的 TODO 工作项）。若不存在可展开的 TODO 工作项：
 
 - 存在 ACTIVE 工作项（执行中）→ 提醒用户运行 `/execute` 按该工作项规格状态继续执行
-- 全部 DONE → 提醒用户运行 `/progress-report` 收尾
+- 全部 DONE → 提醒用户运行 `/wrap-up` 收尾
 - 工作项全空 → 提醒用户先运行 `/plan` 开启轮次
 
 ## 输出

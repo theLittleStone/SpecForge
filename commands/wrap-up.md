@@ -1,5 +1,5 @@
 ---
-name: progress-report
+name: wrap-up
 description: 汇总当前轮次进度，按变更类型分组统计，并在完成时执行归档与总结
 ---
 

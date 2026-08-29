@@ -51,7 +51,7 @@ flowchart TD
     EXEC --> LOOP
     LOOP -->|"全部规格终态"| DONE["跨 spec 自查（C 自检 + T 复核）<br/>→ 工作项总结 → 用户确认 DONE"]
 
-    DONE --> REPORT["/progress-report<br/>L4 全量回归 + 执行证据 + 归档"]
+    DONE --> REPORT["/wrap-up<br/>L4 全量回归 + 执行证据 + 归档"]
 
     FAIL["失败：对侧判定<br/>三类 Issues → 动态预算 L0-L3"]
     LOOP -.-> FAIL
@@ -66,7 +66,7 @@ flowchart TD
 
 2. **执行（T/C 交叉循环）** — `/execute` 一次处理一个工作项：每个规格走 T → C → T 交叉循环。T 写测试（自证 RED）→ C 复现 RED 并审查测试 → C 写实现（假设驱动，Attempt Log 记录）→ T 验证 GREEN 并审查实现。验证分层 L1-L5，深度由变更类型推导。失败由对侧判定、三类分类，经**动态预算**（L0 → L1 Debug 报告 → L2 多候选 → L3 强制路由）路由。全部规格终态后，经**跨 spec 自查 + 用户确认**才标记工作项 DONE。
 
-3. **收尾** — `progress-report` 强制执行验收硬门（L4 全量回归、Goal 可追溯、未决问题全部关闭），聚合**执行证据**（Attempt 次数 / 验证轮数 / 争议次数 / PTS 相位摘要 / F2P-P2P 分轨通过率），然后归档轮次。
+3. **收尾** — `wrap-up` 强制执行验收硬门（L4 全量回归、Goal 可追溯、未决问题全部关闭），聚合**执行证据**（Attempt 次数 / 验证轮数 / 争议次数 / PTS 相位摘要 / F2P-P2P 分轨通过率），然后归档轮次。
 
 非行为变更（chore / docs）走**轻量 spec** 路径：跳过测试撰写，在 `/execute` 内直接实现（C 视角）并经轻量验收（T 视角）。返工由**失败路由协议**驱动——三类 Issues（`[实现缺陷]` / `[测试缺陷]` / `[规格缺陷]`）由对侧判定、路由到**正确的恢复目标**，而非重跑整条链；回退遵循与规划阶段共用的**统一失效协议**。
 
@@ -101,7 +101,7 @@ flowchart TD
 
 常规轨：`[新增|修改: 已定义]` → `[测试中]` → `[测试已验收]` → `[实现中]` → `[已验收]` → `[已验证]`（终态）；返工态 `[待修复]` 经失败路由协议回环。废弃轨：`[废弃: 待删除]` → `[已解引用]` → `[已删除]`（终态）。共 9 个语义状态，AGENTS.md 权威表按操作类型展开为 11 行（常规轨 7 + 废弃轨 4；「已定义」与「待修复」两轨共用）。完整状态表——含各状态设置者——位于 `/setup` 写入的 `AGENTS.md`（§状态机与记法规范）。
 
-废弃是行为缩减，不是测试先行工作：`/specify` 记录待删目标与 `Depended By`（真实 `grep` 扫描）并把验证清单（定向测试 / 全量构建 / grep 扫描）写入 `Test Cases`；`/execute` 跳过测试撰写，C 视角解引用并移入 `_deprecated/` 后执行清单；`progress-report` 物理删除 `_deprecated/` 并置 `[废弃: 已删除]`。
+废弃是行为缩减，不是测试先行工作：`/specify` 记录待删目标与 `Depended By`（真实 `grep` 扫描）并把验证清单（定向测试 / 全量构建 / grep 扫描）写入 `Test Cases`；`/execute` 跳过测试撰写，C 视角解引用并移入 `_deprecated/` 后执行清单；`wrap-up` 物理删除 `_deprecated/` 并置 `[废弃: 已删除]`。
 
 工作项在 plan.md 中带粗粒度三态标记：`TODO`（未展开）→ `ACTIVE`（规格已定义或执行中）→ `DONE`（全部规格终态）；细节由规格状态机承载。规范的完整状态表位于 `/setup` 写入的 `AGENTS.md`（§状态机与记法规范）。命令文件行文可用竖线简写 `[新增|修改: x]`，但写入 planning/ 文档时必须用完整 `[操作类型: 状态]` 格式。
 
@@ -114,7 +114,7 @@ flowchart TD
 | L1 | 规格测试（F2P + P2P） | GREEN 验收（T 视角） |
 | L2 | 相关文件测试（Affected Files 内既有测试） | `[已验收]` 后自动附带 |
 | L3 | 影响范围回归（工作项 Affects + 依赖链） | 工作项最后一个规格验收后 |
-| L4 | 全量回归 | progress-report 收尾 |
+| L4 | 全量回归 | wrap-up 收尾 |
 | L5 | 行为合理性（[人工] 项 + 交叉审查） | 用户引导执行，结果回写 |
 
 内部实现 → L1-2；API 签名 / 数据结构变更 → L1-3；纯新增 → L1-2；纯删除 → L1-3（含 grep 扫描）；文档/配置 → 轻量 L1。Test Cases 带**双轨角色标注**：`F2P`（问题验证——基态必须失败）/ `P2P`（回归保护——基态必须通过）；每非轻量规格至少 1 个 `[自动化] F2P` 测试。
@@ -160,7 +160,7 @@ flowchart TD
 
 ### 跨轮归档
 
-轮次完成时，`progress-report` 先强制执行验收硬门——L4 全量回归 PASS、`# Goal` 可追溯确认、未决问题全部关闭。然后聚合每工作项**执行证据**（Attempt 次数、验证轮数、争议次数、PTS 相位摘要、F2P/P2P 分轨通过率）定位执行层最弱子过程，物理删除 `_deprecated/`、自动生成总结（含 Goal 可追溯清单与执行证据汇总）、把全部规划文件归档到 `planning/archive/`、向 `changelist.md` 追加条目，为下一轮保留历史上下文。（`style_guide.md` 保留在项目根目录供跨轮复用，不归档。）
+轮次完成时，`wrap-up` 先强制执行验收硬门——L4 全量回归 PASS、`# Goal` 可追溯确认、未决问题全部关闭。然后聚合每工作项**执行证据**（Attempt 次数、验证轮数、争议次数、PTS 相位摘要、F2P/P2P 分轨通过率）定位执行层最弱子过程，物理删除 `_deprecated/`、自动生成总结（含 Goal 可追溯清单与执行证据汇总）、把全部规划文件归档到 `planning/archive/`、向 `changelist.md` 追加条目，为下一轮保留历史上下文。（`style_guide.md` 保留在项目根目录供跨轮复用，不归档。）
 
 ---
 
@@ -185,7 +185,7 @@ cp -r commands/ ~/.config/opencode/
 | `/plan` | 规划 | 苏格拉底四问（为什么/假设/替代/边界）→ 代码库探索 → 复杂度评估（`minimal`/`task`/`full`）→ 计划图（工作项、依赖、失败路由、验证深度、设计节点（full 复杂度）、延后工作、负证据）。也负责修订现有计划（变更分类 + 影响规则 + 统一失效）。产出 `planning/plan.md` |
 | `/specify` | 规划 | 把活跃工作项（首个「Depends On 全部 DONE」的 TODO）展开为规格契约：Spec / Interface / Test Double / Test Cases（F2P/P2P 双轨）/ 上游变更因果链（可选）；过大工作项拆回计划图（运行时分解）；受理 `[规格缺陷]` 重定义（该规格 + Interface 依赖者失效）。产出 `planning/specs.md` |
 | `/execute` | **执行** | 唯一执行入口：一次处理一个工作项，T/C 交叉循环（auto / step 模式）。T 写测试（RED）→ C 复现 RED + 审查测试 → C 写实现（假设 → Attempt Log）→ T 验证 GREEN + 审查实现 → 分层验证 L2/L3 → `[人工]` 项 → 跨 spec 自查 → 工作项总结 → 用户确认 DONE。失败处理：对侧判定 + 三类 Issues + 动态预算 L0-L3 + 振荡/停滞守卫 |
-| `/progress-report` | 收尾 | 门控 L4 全量回归 + Goal 可追溯 + 未决问题关闭，聚合执行证据（Attempt / 验证轮 / 争议 / PTS / F2P-P2P 通过率），然后物理删除 `_deprecated/`（置 `[废弃: 已删除]`）、归档到 `planning/archive/`、追加 `changelist.md` |
+| `/wrap-up` | 收尾 | 门控 L4 全量回归 + Goal 可追溯 + 未决问题关闭，聚合执行证据（Attempt / 验证轮 / 争议 / PTS / F2P-P2P 通过率），然后物理删除 `_deprecated/`（置 `[废弃: 已删除]`）、归档到 `planning/archive/`、追加 `changelist.md` |
 
 ---
 
@@ -204,7 +204,7 @@ commands/               # 流水线命令定义（Markdown + YAML frontmatter）
   plan.md               # 规划：对话 → 探索 → 评估 → 计划图 / 修订
   specify.md            # 规划：规格懒展开 + [规格缺陷] 重定义
   execute.md            # 执行：T/C 交叉循环（auto | step）
-  progress-report.md    # 收尾 & 归档（+ 执行证据）
+  wrap-up.md            # 收尾 & 归档（+ 执行证据）
   setup.md              # AGENTS.md 共识初始化器
   _deprecated/          # 退役制品：10 个旧命令 + 2 个旧 skill
                         # （knowledge-augment、style-resolver），保留供参考
