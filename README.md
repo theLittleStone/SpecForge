@@ -20,7 +20,7 @@ Instead of letting a single AI agent design, code, and grade itself, SpecForge s
 
 SpecForge guarantees quality through **separation, not trust**, built on three structural principles:
 
-1. **Files as agent context isolation** — Each planning artifact is the primary working context of a **separate agent conversation**, self-contained enough that a conversation only needs to read the documents it needs and write its own output. No agent carries the entire pipeline context.
+1. **Files as agent context isolation** — Each planning artifact is the primary working context of a **separate agent conversation**, self-contained enough that a conversation only needs to read the documents it needs and write its own output. No agent carries the entire pipeline context. Planning-side codebase exploration can additionally be delegated to an isolated read-only **explorer subagent** (`agents/explorer.md`): only the distilled evidence summary (facts with `file:line` + insights + unconfirmed items) crosses the boundary — raw exploration output never enters the planner's context.
 
 2. **Evidence-conditioned plan graph** — Planning is not a fixed chain but a **graph**: nodes are work items (with dependency edges and explicit failure routes), and structure is decided by evidence and complexity, not by a preset sequence. `complexity: minimal | task | full` determines how many planning layers the round needs; specs are expanded **lazily** (per work item, right before execution) instead of all upfront. Simple tasks naturally collapse to a short chain — that is by design, not degradation.
 
@@ -36,6 +36,9 @@ SpecForge guarantees quality through **separation, not trust**, built on three s
 ```mermaid
 flowchart TD
     PLAN["/plan<br/>Socratic dialogue → explore → assess complexity → plan graph"]
+    EXPL["explorer subagent (read-only)<br/>evidence summary: facts file:line + insights"]
+    PLAN -. "exploration brief" .-> EXPL
+    EXPL -. "evidence summary" .-> PLAN
     PLAN --> SPEC["/specify<br/>expand active work item into spec contract"]
 
     SPEC --> EXEC["/execute<br/>T/C cross-verification loop (auto | step)"]
@@ -62,7 +65,7 @@ flowchart TD
 
 **Three phases**:
 
-1. **Planning (adaptive)** — `/plan` runs the Socratic dialogue (why / assumptions / alternatives / boundaries), explores the codebase, assesses complexity (`minimal | task | full`), and produces a **plan graph** (`planning/plan.md`: work items with dependencies, failure routes, verification depth per change type). `/specify` expands the active work item into a spec contract (`planning/specs.md`) lazily — right before it enters execution. When a work item turns out too large, it is split and written back into the graph (runtime decomposition). Plan revisions propagate through **change classification + impact rules** and invalidate only affected work items. Unresolved questions are recorded in the requirement node of plan.md and must be closed (`[resolved]` / `[won't-fix]`) before the round can be closed.
+1. **Planning (adaptive)** — `/plan` runs the Socratic dialogue (why / assumptions / alternatives / boundaries), explores the codebase (inline three-hop walk, or delegated to the read-only **explorer subagent** — only the evidence summary returns), assesses complexity (`minimal | task | full`), and produces a **plan graph** (`planning/plan.md`: work items with dependencies, failure routes, verification depth per change type). `/specify` expands the active work item into a spec contract (`planning/specs.md`) lazily — right before it enters execution. When a work item turns out too large, it is split and written back into the graph (runtime decomposition). Plan revisions propagate through **change classification + impact rules** and invalidate only affected work items. Unresolved questions are recorded in the requirement node of plan.md and must be closed (`[resolved]` / `[won't-fix]`) before the round can be closed.
 
 2. **Execution (T/C cross-verification loop)** — `/execute` processes exactly one work item: each spec runs the T → C → T cycle. T writes tests (self-confirming RED), C reproduces RED and audits the tests, C implements (hypothesis-driven, recorded in the Attempt Log), T verifies GREEN and audits the implementation. Verification is layered L1–L5 with depth derived from the change type. Failures are judged by the opposite side, classified into three classes, and routed through a **dynamic budget** (L0 → L1 debug report → L2 multi-candidate → L3 forced routing). When all specs reach terminal state, the work item is closed via a cross-spec check and **user confirmation** before marking DONE.
 
@@ -170,11 +173,11 @@ When a round completes, `wrap-up` first enforces hard acceptance gates — L4 fu
 # Clone into the opencode config directory
 git clone https://github.com/theLittleStone/SpecForge.git ~/.config/opencode/
 
-# Or just copy the commands
-cp -r commands/ ~/.config/opencode/
+# Or copy commands + agents
+cp -r commands/ agents/ ~/.config/opencode/
 ```
 
-After installation, run `/setup` in the target project to initialize `AGENTS.md` (every pipeline command checks for it first), then start the pipeline with `/plan`.
+After installation, run `/setup` in the target project to initialize `AGENTS.md` (every pipeline command checks for it first), then start the pipeline with `/plan`. The `agents/explorer.md` read-only exploration subagent is optional — without it, `/plan` falls back to its inline three-hop exploration.
 
 ---
 
@@ -182,7 +185,7 @@ After installation, run `/setup` in the target project to initialize `AGENTS.md`
 
 | Command | Stage | Description |
 | --------- | ------- | ------------- |
-| `/plan` | Planning | Socratic dialogue (why / assumptions / alternatives / boundaries) → codebase exploration → complexity assessment (`minimal`/`task`/`full`) → plan graph with work items, dependencies, failure routes, verification depth, design nodes (full complexity), deferred work and negative evidence. Also revises existing plans via change classification + impact rules + unified invalidation. Produces `planning/plan.md` |
+| `/plan` | Planning | Socratic dialogue (why / assumptions / alternatives / boundaries) → codebase exploration (inline three-hop walk, or delegated to the read-only **explorer subagent** — only the evidence summary returns) → complexity assessment (`minimal`/`task`/`full`) → plan graph with work items, dependencies, failure routes, verification depth, design nodes (full complexity), deferred work and negative evidence. Also revises existing plans via change classification + impact rules + unified invalidation. Produces `planning/plan.md` |
 | `/specify` | Planning | Expands the active work item (first `TODO` whose dependencies are all `DONE`) into a spec contract: Spec / Interface / Test Double / Test Cases (F2P/P2P dual-track) / upstream change causality (optional); splits oversized work items back into the graph (runtime decomposition); handles `[规格缺陷]` redefinition (single spec + Interface dependents invalidated). Produces `planning/specs.md` |
 | `/execute` | **Execution** | The single execution entry: processes exactly one work item via the T/C cross-verification loop (auto / step modes). T writes tests (RED) → C reproduces RED + audits tests → C implements (hypothesis → Attempt Log) → T verifies GREEN + audits implementation → layered verification L2/L3 → `[人工]` items → cross-spec check → work-item summary → user confirms DONE. Failure handling: opposite-side judgment + three-class Issues + dynamic budget L0-L3 + oscillation/stagnation guards |
 | `/wrap-up` | Close | Gate on L4 full regression + Goal traceability + closed unresolved questions, aggregate execution evidence (attempts / verification rounds / disputes / PTS / F2P-P2P rates), then physically delete `_deprecated/` (setting `[废弃: 已删除]`), archive to `planning/archive/`, append to `changelist.md` |
@@ -200,8 +203,10 @@ After installation, run `/setup` in the target project to initialize `AGENTS.md`
 ## Project Structure
 
 ```text
+agents/                 # Subagent definitions (Markdown + YAML frontmatter, opencode agents/)
+  explorer.md           # Read-only planning exploration subagent: exploration brief in → evidence summary out
 commands/               # Pipeline command definitions (Markdown + YAML frontmatter)
-  plan.md               # Planning: dialogue → explore → assess → plan graph / revise
+  plan.md               # Planning: dialogue → explore (self or explorer) → assess → plan graph / revise
   specify.md            # Planning: lazy spec expansion + [规格缺陷] redefinition
   execute.md            # Execution: T/C cross-verification loop (auto | step)
   wrap-up.md            # Closeout & archival (+ execution evidence)

@@ -20,7 +20,7 @@ SpecForge 是一套为 AI 编程 agent（[opencode](https://opencode.ai)）设�
 
 SpecForge 通过「**分离而非信任**」保证质量，建立在三条结构性原则之上：
 
-1. **文件 = agent 上下文隔离** — 每个规划产物是**独立 agent 对话**的主要工作上下文，自包含到「单次对话只读自己需要的文档、写自己的输出」即可独立工作；没有哪个 agent 需要背负整条流水线的上下文。
+1. **文件 = agent 上下文隔离** — 每个规划产物是**独立 agent 对话**的主要工作上下文，自包含到「单次对话只读自己需要的文档、写自己的输出」即可独立工作；没有哪个 agent 需要背负整条流水线的上下文。规划侧的代码探索还可委托给隔离的只读 **explorer 子 agent**（`agents/explorer.md`）：只有蒸馏后的证据摘要（事实 + file:line 引用 + 可行动洞察 + 未确认项）跨边界返回，原始探索输出永远不进入规划 agent 的上下文。
 
 2. **证据条件化的计划图** — 规划不是固定链条，而是一张**图**：节点是工作项（带依赖边与显式失败路由），结构由证据和复杂度决定，而非预设顺序。`complexity: minimal | task | full` 决定本轮需要几层规划；规格**按需懒展开**（每个工作项执行前才定义），而非一次性全量定义。简单任务自然塌缩为短链——这是设计而非退化。
 
@@ -36,6 +36,9 @@ SpecForge 通过「**分离而非信任**」保证质量，建立在三条结构
 ```mermaid
 flowchart TD
     PLAN["/plan<br/>苏格拉底对话 → 探索 → 复杂度评估 → 计划图"]
+    EXPL["explorer 子 agent（只读）<br/>证据摘要：事实 file:line + 洞察"]
+    PLAN -. "探索 brief" .-> EXPL
+    EXPL -. "证据摘要" .-> PLAN
     PLAN --> SPEC["/specify<br/>把活跃工作项展开为规格契约"]
 
     SPEC --> EXEC["/execute<br/>T/C 交叉循环（auto | step）"]
@@ -62,7 +65,7 @@ flowchart TD
 
 **三个阶段**：
 
-1. **规划（自适应）** — `/plan` 执行苏格拉底四问（为什么 / 隐含假设 / 替代方案 / 边界条件）、探索代码库、评估复杂度（`minimal | task | full`），产出**计划图**（`planning/plan.md`：工作项 + 依赖 + 失败路由 + 每变更类型的验证深度）。`/specify` 把活跃工作项懒展开为规格契约（`planning/specs.md`）——就在它进入执行之前。工作项过大时拆回计划图（运行时分解）。计划修订通过**变更分类 + 影响规则**传播，只失效受影响的工作项。未决问题记入 plan.md 需求节点，须标记 `[resolved]` / `[won't-fix]` 关闭后方可收尾。
+1. **规划（自适应）** — `/plan` 执行苏格拉底四问（为什么 / 隐含假设 / 替代方案 / 边界条件）、探索代码库（自做三跳，或委托只读的 **explorer 子 agent**——仅证据摘要返回）、评估复杂度（`minimal | task | full`），产出**计划图**（`planning/plan.md`：工作项 + 依赖 + 失败路由 + 每变更类型的验证深度）。`/specify` 把活跃工作项懒展开为规格契约（`planning/specs.md`）——就在它进入执行之前。工作项过大时拆回计划图（运行时分解）。计划修订通过**变更分类 + 影响规则**传播，只失效受影响的工作项。未决问题记入 plan.md 需求节点，须标记 `[resolved]` / `[won't-fix]` 关闭后方可收尾。
 
 2. **执行（T/C 交叉循环）** — `/execute` 一次处理一个工作项：每个规格走 T → C → T 交叉循环。T 写测试（自证 RED）→ C 复现 RED 并审查测试 → C 写实现（假设驱动，Attempt Log 记录）→ T 验证 GREEN 并审查实现。验证分层 L1-L5，深度由变更类型推导。失败由对侧判定、三类分类，经**动态预算**（L0 → L1 Debug 报告 → L2 多候选 → L3 强制路由）路由。全部规格终态后，经**跨 spec 自查 + 用户确认**才标记工作项 DONE。
 
@@ -170,11 +173,11 @@ flowchart TD
 # 克隆到 opencode 配置目录
 git clone https://github.com/theLittleStone/SpecForge.git ~/.config/opencode/
 
-# 或只复制 commands
-cp -r commands/ ~/.config/opencode/
+# 或复制 commands + agents
+cp -r commands/ agents/ ~/.config/opencode/
 ```
 
-安装后在目标项目中运行 `/setup` 初始化 `AGENTS.md`（所有流水线命令都会先检查它），然后用 `/plan` 启动流水线。
+安装后在目标项目中运行 `/setup` 初始化 `AGENTS.md`（所有流水线命令都会先检查它），然后用 `/plan` 启动流水线。`agents/explorer.md` 只读探索子 agent 为可选项——未安装时 `/plan` 回退为自做三跳探索。
 
 ---
 
@@ -182,7 +185,7 @@ cp -r commands/ ~/.config/opencode/
 
 | 命令 | 阶段 | 说明 |
 | ------ | ------ | ------ |
-| `/plan` | 规划 | 苏格拉底四问（为什么/假设/替代/边界）→ 代码库探索 → 复杂度评估（`minimal`/`task`/`full`）→ 计划图（工作项、依赖、失败路由、验证深度、设计节点（full 复杂度）、延后工作、负证据）。也负责修订现有计划（变更分类 + 影响规则 + 统一失效）。产出 `planning/plan.md` |
+| `/plan` | 规划 | 苏格拉底四问（为什么/假设/替代/边界）→ 代码库探索（自做三跳，或委托只读的 **explorer 子 agent**——仅证据摘要返回）→ 复杂度评估（`minimal`/`task`/`full`）→ 计划图（工作项、依赖、失败路由、验证深度、设计节点（full 复杂度）、延后工作、负证据）。也负责修订现有计划（变更分类 + 影响规则 + 统一失效）。产出 `planning/plan.md` |
 | `/specify` | 规划 | 把活跃工作项（首个「Depends On 全部 DONE」的 TODO）展开为规格契约：Spec / Interface / Test Double / Test Cases（F2P/P2P 双轨）/ 上游变更因果链（可选）；过大工作项拆回计划图（运行时分解）；受理 `[规格缺陷]` 重定义（该规格 + Interface 依赖者失效）。产出 `planning/specs.md` |
 | `/execute` | **执行** | 唯一执行入口：一次处理一个工作项，T/C 交叉循环（auto / step 模式）。T 写测试（RED）→ C 复现 RED + 审查测试 → C 写实现（假设 → Attempt Log）→ T 验证 GREEN + 审查实现 → 分层验证 L2/L3 → `[人工]` 项 → 跨 spec 自查 → 工作项总结 → 用户确认 DONE。失败处理：对侧判定 + 三类 Issues + 动态预算 L0-L3 + 振荡/停滞守卫 |
 | `/wrap-up` | 收尾 | 门控 L4 全量回归 + Goal 可追溯 + 未决问题关闭，聚合执行证据（Attempt / 验证轮 / 争议 / PTS / F2P-P2P 通过率），然后物理删除 `_deprecated/`（置 `[废弃: 已删除]`）、归档到 `planning/archive/`、追加 `changelist.md` |
@@ -200,8 +203,10 @@ cp -r commands/ ~/.config/opencode/
 ## 项目结构
 
 ```text
+agents/                 # 子 agent 定义（Markdown + YAML frontmatter，opencode agents/）
+  explorer.md           # 只读规划探索子 agent：探索 brief 进 → 证据摘要出
 commands/               # 流水线命令定义（Markdown + YAML frontmatter）
-  plan.md               # 规划：对话 → 探索 → 评估 → 计划图 / 修订
+  plan.md               # 规划：对话 → 探索（自做或 explorer）→ 评估 → 计划图 / 修订
   specify.md            # 规划：规格懒展开 + [规格缺陷] 重定义
   execute.md            # 执行：T/C 交叉循环（auto | step）
   wrap-up.md            # 收尾 & 归档（+ 执行证据）
